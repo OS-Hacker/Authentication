@@ -3,12 +3,7 @@ const JWT = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const crypto = require("crypto");
 const sendEmail = require("../util/SendEmail");
-
-// Configuration constants
-const JWT_SECRET = "HDHDHDHDHDHD";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
-const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
-const SALT_ROUNDS = 12;
+const forgotPasswordTemplate = require("../templates/ForgotPasswordTemplate");
 
 /**
  * @desc    Register a new user
@@ -17,31 +12,31 @@ const SALT_ROUNDS = 12;
  */
 const signupController = async (req, res, next) => {
   try {
-    // Validate request body
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      logger.warn(`Validation errors in signup: ${errors.array()}`);
+    const { userName, email, password } = req.body;
+
+    // Validate password strength
+    if (!password || password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "Validation errors",
-        errors: errors.array(),
+        message: "Password must be at least 8 characters long",
       });
     }
-
-    const { userName, email, password } = req.body;
 
     // Check if user already exists
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {
-      logger.warn(`Signup attempt with existing email: ${email}`);
       return res.status(409).json({
         success: false,
         message: "User already exists. Please login instead.",
       });
     }
 
+    const saltRounds = parseInt(process.env.SALT_ROUNDS, 10);
+
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in ms
 
     // Create email verification token
     const emailVerificationToken = crypto.randomBytes(32).toString("hex");
@@ -60,55 +55,27 @@ const signupController = async (req, res, next) => {
 
     // Save user to database
     const savedUser = await newUser.save();
-    logger.info(`New user created: ${savedUser._id}`);
 
-    // Create verification URL
-    const verificationUrl = `${req.protocol}://${req.get(
-      "host"
-    )}/api/v1/auth/verify-email/${emailVerificationToken}`;
+    // Prepare response without sensitive data
+    const userResponse = {
+      id: savedUser._id,
+      userName: savedUser.userName,
+      email: savedUser.email,
+      createdAt: savedUser.createdAt,
+      emailVerified: savedUser.emailVerified,
+    };
 
-    // Send verification email
-    try {
-      await sendEmail({
-        email: savedUser.email,
-        subject: "Verify Your Email Address",
-        template: "email-verification",
-        context: {
-          userName: savedUser.userName,
-          verificationUrl,
-          supportEmail: "support@example.com",
-        },
-      });
-
-      // Prepare response without sensitive data
-      const userResponse = {
-        id: savedUser._id,
-        userName: savedUser.userName,
-        email: savedUser.email,
-        createdAt: savedUser.createdAt,
-        emailVerified: savedUser.emailVerified,
-      };
-
-      return res.status(201).json({
-        success: true,
-        message:
-          "Registration successful. Please check your email to verify your account.",
-        user: userResponse,
-      });
-    } catch (emailError) {
-      // Rollback user creation if email fails
-      await userModel.findByIdAndDelete(savedUser._id);
-      logger.error("Email sending failed during signup:", emailError);
-      return res.status(500).json({
-        success: false,
-        message:
-          "Could not send verification email. Please contact support or try again later.",
-      });
-    }
+    return res.status(201).json({
+      success: true,
+      message: "Registration successful",
+      user: userResponse,
+    });
   } catch (error) {
+    console.log("Signup error:", error);
     return res.status(500).json({
       success: false,
-      message: "An unexpected error occurred during registration",
+      message:
+        "An unexpected error occurred during registration. Please try again.",
     });
   }
 };
@@ -122,20 +89,14 @@ const loginController = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
+    console.log(email, password);
+
     // Find user by email (including password for comparison)
     const user = await userModel.findOne({ email }).select("+password");
     if (!user) {
       return res.status(401).json({
         success: false,
         message: "Invalid credentials",
-      });
-    }
-
-    // Check if email is verified
-    if (!user.emailVerified) {
-      return res.status(403).json({
-        success: false,
-        message: "Please verify your email before logging in",
       });
     }
 
@@ -153,12 +114,11 @@ const loginController = async (req, res, next) => {
       id: user._id,
       email: user.email,
       userName: user.userName,
-      role: user.role || "user", // Default role if not specified
     };
 
     // Generate JWT token
-    const token = JWT.sign(tokenPayload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
+    const token = JWT.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
     // Set secure HTTP-only cookie
@@ -173,7 +133,6 @@ const loginController = async (req, res, next) => {
       id: user._id,
       userName: user.userName,
       email: user.email,
-      role: user.role,
       createdAt: user.createdAt,
       lastLogin: user.lastLogin,
     };
@@ -189,10 +148,51 @@ const loginController = async (req, res, next) => {
       token, // Also send token in response for mobile clients
     });
   } catch (error) {
-      return res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "An unexpected error occurred during login",
     });
+  }
+};
+
+const verifyUserAccountController = async (req, res) => {
+  const { email } = req.body;
+
+  // Create verification URL
+  const verificationUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/auth/verify-email/${emailVerificationToken}`;
+
+  if (!email) {
+    return res.status(401).json({
+      success: false,
+      message: "email is required",
+    });
+  }
+
+  // Validate email before sending
+  if (!email.includes("@") || !verificationUrl.startsWith("http")) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid recipient email address",
+    });
+  }
+
+  try {
+    // Enhanced email sending with timeout
+    await sendEmail({
+      to: email,
+      subject: "Verify Your Email",
+      html: verifyAccountTemplate(email, verificationUrl),
+      text: `Please verify your email by visiting this link: ${verificationUrl}\n\nEmail: ${email}\nPassword: The password you entered during signup\n\nThis link expires in 24 hours.`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Verification email sent to ${email}`,
+    });
+  } catch (emailError) {
+    console.log("Failed to send verification email:", emailError);
   }
 };
 
@@ -225,7 +225,6 @@ const verifyEmailController = async (req, res) => {
     user.verifiedAt = new Date();
     await user.save();
 
-
     // Create token payload
     const tokenPayload = {
       id: user._id,
@@ -235,8 +234,8 @@ const verifyEmailController = async (req, res) => {
     };
 
     // Generate JWT token
-    const authToken = JWT.sign(tokenPayload, JWT_SECRET, {
-      expiresIn: JWT_EXPIRES_IN,
+    const authToken = JWT.sign(tokenPayload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
     // Set cookie and redirect for web clients
@@ -261,10 +260,163 @@ const verifyEmailController = async (req, res) => {
 };
 
 /**
+ * @desc    Forgot password - send reset token
+ * @route   POST /api/v1/auth/forgot-password
+ * @access  Public
+ */
+const forgotPasswordController = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validate email input
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    // Check if user exists
+    const user = await userModel.findOne({ email });
+    if (!user) {
+      // Don't reveal whether email exists for security
+      return res.status(200).json({
+        success: true,
+        message: "If your email exists, you'll receive a password reset link",
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    const passwordResetToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    const PASSWORD_RESET_EXPIRY = 15 * 60 * 1000; // 15 min
+
+    // Set token expiry (15 minutes from now)
+    const passwordResetExpires = Date.now() + PASSWORD_RESET_EXPIRY;
+
+    // Save token to database
+    user.passwordResetToken = passwordResetToken;
+    user.passwordResetExpires = passwordResetExpires;
+    await user.save();
+
+    // Create reset URL
+    // const resetUrl = `${req.protocol}://${req.get(
+    //   "host"
+    // )}/reset-password/${resetToken}`;
+
+    // Use frontend URL instead of backend URL
+    const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
+
+    try {
+      // Send email
+      await sendEmail({
+        to: user.email,
+        subject: "Your Password Reset Token (Valid for 15 minutes)",
+        html: forgotPasswordTemplate(resetUrl),
+        text: `Please reset your password by visiting this link: ${resetUrl}\n\nThis link expires in 15 minutes.`,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Password reset token sent to email",
+      });
+    } catch (emailError) {
+      // Clear the reset token if email fails
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save();
+
+      console.error("Failed to send password reset email:", emailError);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send password reset email",
+      });
+    }
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while processing your request",
+    });
+  }
+};
+
+/**
+ * @desc    Reset password
+ * @route   PATCH /api/v1/auth/reset-password/:token
+ * @access  Public
+ */
+const resetPasswordController = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    // Validate password
+    if (!password || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 8 characters long",
+      });
+    }
+
+    // Hash the incoming token to compare with database
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
+    // Find user with matching token that hasn't expired
+    const user = await userModel.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired token. Please request a new reset link.",
+      });
+    }
+
+    const saltRounds = parseInt(process.env.SALT_ROUNDS, 10);
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Update user password and clear reset token
+    user.password = hashedPassword;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    // Send confirmation email
+    await sendEmail({
+      to: user.email,
+      subject: "Password Changed Successfully",
+      html: `<p>Your password has been successfully changed.</p>`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while resetting your password",
+    });
+  }
+};
+
+/**
  * @desc    Get current user profile
  * @route   GET /api/v1/auth/me
  * @access  Private
  */
+
 const getMeController = async (req, res) => {
   try {
     const user = await userModel.findById(req.user.id).select("-password");
@@ -293,4 +445,7 @@ module.exports = {
   loginController,
   verifyEmailController,
   getMeController,
+  verifyUserAccountController,
+  forgotPasswordController,
+  resetPasswordController,
 };

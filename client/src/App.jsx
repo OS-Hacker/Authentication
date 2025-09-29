@@ -5,9 +5,15 @@ import {
   Route,
   Navigate,
 } from "react-router-dom";
-import Signup from "./components/Signup";
-import Login from "./components/Login";
-import Home from "./components/Home";
+
+import toast, { Toaster } from "react-hot-toast";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import Home from "./pages/Home";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./components/ResetPassword";
+
+
 
 const App = () => {
   return (
@@ -15,20 +21,19 @@ const App = () => {
       <Routes>
         {/* Default route redirects to login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
-
         {/* Login route */}
         <Route path="/login" element={<Login />} />
-
         {/* Signup route */}
         <Route path="/signup" element={<Signup />} />
         <Route path="/Home" element={<Home />} />
-
-        {/* Add more routes as needed */}
-        {/* <Route path="/dashboard" element={<Dashboard />} /> */}
+        {/* forgot-password */}
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
 
         {/* Optional: 404 page for unmatched routes */}
         <Route path="*" element={<div>404 Not Found</div>} />
       </Routes>
+      <Toaster />
     </Router>
   );
 };
