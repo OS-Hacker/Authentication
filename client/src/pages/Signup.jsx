@@ -1,7 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import axios from "axios";
 import toast from "react-hot-toast";
+import apiClient from "../services/Api";
+
+// The Standard Flow: Registration -> Verification -> Login -> Tokens
 
 const Signup = () => {
   const [formData, setFormData] = useState({
@@ -55,10 +57,7 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/signup`,
-        formData
-      );
+      const { data } = await apiClient.post(`/signup`, formData);
 
       if (data?.success) {
         toast.success(data.message);
@@ -66,6 +65,7 @@ const Signup = () => {
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Signup failed");
+      console.log(error)
     } finally {
       setIsLoading(false);
     }

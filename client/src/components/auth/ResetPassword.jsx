@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import axios from "axios";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import apiClient from "../../services/Api";
 
 const ResetPassword = () => {
   const { token } = useParams();
@@ -27,10 +27,9 @@ const ResetPassword = () => {
     }
 
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/reset-password/${token}`,
-        { password }
-      );
+      const response = await apiClient.post(`/reset-password/${token}`, {
+        password,
+      });
 
       if (response.data.success) {
         toast.success("Password reset successfully!");

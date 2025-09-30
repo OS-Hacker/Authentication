@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import axios from "axios";
+import apiClient from "../services/Api";
 import toast from "react-hot-toast";
 
 const Login = () => {
@@ -47,18 +47,15 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/login`,
-        formData
-      );
+      const response = await apiClient.post(`/login`, formData);
 
       if (response.data.success) {
         toast.success(response.data.message);
-        localStorage.setItem("authToken", response.data.token);
         navigate("/Home");
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Login failed");
+      
     } finally {
       setIsLoading(false);
     }

@@ -1,27 +1,58 @@
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs"); // ✅ Import bcrypt
 
-const userSchema = new mongoose.Schema({
-  userName: {
-    type: String,
-    required: true,
+const userSchema = new mongoose.Schema(
+  {
+    userName: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true, // ✅ Add unique
+      lowercase: true, // ✅ Add lowercase
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: 6, // ✅ Add minimum length
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationToken: String,
+    emailVerificationTokenExpires: Date,
+    passwordResetToken: String,
+    passwordResetExpires: Date,
   },
-  email: {
-    type: String,
-    required: true,
-  },
-  password: {
-    type: String,
-    required: true,
-  },
-  emailVerified: { type: Boolean, default: false },
-  // verify account
-  emailVerificationToken: String,
-  emailVerificationTokenExpires: Date,
-  // password reset
-  passwordResetToken: String,
-  passwordResetExpires: Date,
+  {
+    timestamps: true, // ✅ Add timestamps for createdAt, updatedAt
+  }
+);
+
+// ✅ Hash password before saving - MUST be before model creation
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
-const userModel = mongoose.model("user", userSchema);
+// ✅ Compare password method - MUST be before model creation
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// ✅ Create model AFTER all schema methods are defined
+const userModel = mongoose.model("User", userSchema);
 
 module.exports = userModel;
