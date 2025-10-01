@@ -1,4 +1,10 @@
 const jwt = require("jsonwebtoken");
+const refreshTokenModel = require("../models/refreshToken.model");
+const {
+  generateAccessToken,
+  generateRefreshToken,
+} = require("../utils/GenerateTokens");
+const { ErrorHandler } = require("../utils/ErrorHandler");
 
 // Verify access token middleware
 async function authToken(req, res, next) {
@@ -6,6 +12,8 @@ async function authToken(req, res, next) {
     const accessToken =
       req.cookies?.accessToken ||
       req.headers.authorization?.replace("Bearer ", "");
+
+    console.log(accessToken);
 
     if (!accessToken) {
       return res.status(401).json({
@@ -32,9 +40,10 @@ async function authToken(req, res, next) {
           success: false,
         });
       }
-
-      req.userId = decoded?._id;
-      req.user = decoded;
+      req.user = {
+        id: decoded.id,
+        email: decoded.email,
+      };
       next();
     });
   } catch (err) {
@@ -47,74 +56,4 @@ async function authToken(req, res, next) {
   }
 }
 
-// Verify refresh token middleware
-async function verifyRefreshToken(req, res, next) {
-  try {
-    const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
-
-    if (!refreshToken) {
-      return res.status(401).json({
-        message: "Refresh token required",
-        error: true,
-        success: false,
-      });
-    }
-
-    jwt.verify(
-      refreshToken,
-      process.env.REFRESH_TOKEN_SECRET,
-      (err, decoded) => {
-        if (err) {
-          return res.status(401).json({
-            message: "Invalid refresh token",
-            error: true,
-            success: false,
-          });
-        }
-
-        req.userId = decoded?._id;
-        req.user = decoded;
-        next();
-      }
-    );
-  } catch (err) {
-    res.status(500).json({
-      message: err.message || err,
-      data: [],
-      error: true,
-      success: false,
-    });
-  }
-}
-
-// Set tokens in cookies
-function setTokenCookies(res, accessToken, refreshToken) {
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-  };
-
-  res.cookie("accessToken", accessToken, {
-    ...cookieOptions,
-    maxAge: 15 * 60 * 1000, // 15 minutes
-  });
-
-  res.cookie("refreshToken", refreshToken, {
-    ...cookieOptions,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-  });
-}
-
-// Clear tokens from cookies
-function clearTokenCookies(res) {
-  res.clearCookie("accessToken");
-  res.clearCookie("refreshToken");
-}
-
-module.exports = {
-  authToken,
-  verifyRefreshToken,
-  setTokenCookies,
-  clearTokenCookies,
-};
+module.exports = authToken;

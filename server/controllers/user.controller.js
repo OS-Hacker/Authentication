@@ -202,6 +202,9 @@ const loginController = async (req, res, next) => {
 
     // Find user by email
     const user = await userModel.findOne({ email });
+
+    console.log("user -", user);
+
     if (!user) {
       return next(new ErrorHandler("Invalid credentials", 400));
     }
@@ -215,10 +218,12 @@ const loginController = async (req, res, next) => {
 
     // Create token payload
     const tokenPayload = {
-      id: user._id,
+      id: user.id,
       email: user.email,
       userName: user.userName,
     };
+
+    console.log("tokenPayload -", tokenPayload);
 
     // Generate access and refresh tokens
     const accessToken = generateAccessToken(tokenPayload);
@@ -419,7 +424,7 @@ const resetPasswordController = async (req, res, next) => {
 
 const getMeController = async (req, res, next) => {
   try {
-    const user = await userModel.findById(req.user.id).select("-password");
+    const user = await userModel.findById(req?.user.id).select("-password");
 
     if (!user) {
       return next(new ErrorHandler("User Not Found", 400));
@@ -434,96 +439,85 @@ const getMeController = async (req, res, next) => {
   }
 };
 
+// when user access token expire
 const refreshTokenController = async (req, res, next) => {
   try {
-    // Case 1: Token not provided in cookies
     const token = req.cookies.refreshToken;
+
+    console.log(token);
 
     if (!token) {
       return next(new ErrorHandler("Refresh token required", 400));
     }
 
-    // Case 2: Token not found in database (revoked or invalid)
     const storedToken = await refreshTokenModel.findOne({ token });
     if (!storedToken) {
-      // Clear the invalid cookie
-      res.clearCookie("refreshToken", {
-        httpOnly: true,
-        // secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-      });
-      return next(new ErrorHandler("Invalid refresh token", 401));
+      res.clearCookie("refreshToken");
+      res.clearCookie("accessToken");
+      return next(new ErrorHandler("Invalid refresh token", 400));
     }
 
-    // Case 3: Token verification
     JWT.verify(
       token,
       process.env.REFRESH_TOKEN_SECRET,
       async (err, decoded) => {
         if (err) {
-          // Clear the invalid cookie
-          res.clearCookie("refreshToken", {
-            httpOnly: true,
-            // secure: process.env.NODE_ENV === "production",
-            sameSite: "strict",
-          });
+          res.clearCookie("refreshToken");
+          res.clearCookie("accessToken");
 
-          // Case 3a: Token expired
           if (err.name === "TokenExpiredError") {
-            // Remove expired token from database
             await refreshTokenModel.deleteOne({ token });
             return next(new ErrorHandler("Refresh token expired", 401));
           }
 
-          // Case 3b: Token invalid (malformed, etc.)
           return next(new ErrorHandler("Invalid refresh token", 401));
         }
 
-        // Case 4: Token valid - generate new access token
+        // Generate new tokens
         const newAccessToken = generateAccessToken({
           _id: decoded._id || decoded.id,
           email: decoded.email,
         });
 
-        // Optional: Refresh token rotation for security
         const newRefreshToken = generateRefreshToken({
           _id: decoded._id || decoded.id,
           email: decoded.email,
         });
 
-        // Update refresh token in database and cookies
+        // Update refresh token in database
         await refreshTokenModel.findOneAndUpdate(
           { token },
           {
             token: newRefreshToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           }
         );
 
-        // Set new refresh token in cookie
-        res.cookie("refreshToken", newRefreshToken, {
+        // Set new tokens in cookies
+        const cookieOptions = {
           httpOnly: true,
-          // secure: process.env.NODE_ENV === "production",
           sameSite: "strict",
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        });
+          maxAge: 7 * 24 * 60 * 60 * 1000,
+        };
 
-        // Set new access token in cookie
-        res.cookie("accessToken", newAccessToken, {
-          httpOnly: true,
-          // secure: process.env.NODE_ENV === "production",
-          sameSite: "strict",
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        });
+        // Add secure flag in production
+        // if (process.env.NODE_ENV === "production") {
+        //   cookieOptions.secure = true;
+        // }
+
+        res.cookie("refreshToken", newRefreshToken, cookieOptions);
+        res.cookie("accessToken", newAccessToken, cookieOptions);
 
         res.status(200).json({
           success: true,
           message: "Tokens refreshed successfully",
+          // Optionally return the new access token in response body too
+          // accessToken: newAccessToken,
         });
       }
     );
   } catch (error) {
-    // Case 5: Server error
+    console.error("Refresh token error:", error);
     return next(new ErrorHandler("Internal server error", 500));
   }
 };
@@ -560,7 +554,6 @@ const logoutController = async (req, res, next) => {
 };
 
 module.exports = {
-  refreshTokenController,
   signupController,
   loginController,
   verifyEmailController,
@@ -568,5 +561,6 @@ module.exports = {
   verifyUserAccountController,
   forgotPasswordController,
   resetPasswordController,
+  refreshTokenController,
   logoutController,
 };

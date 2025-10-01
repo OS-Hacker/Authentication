@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import apiClient from "../services/Api";
 import toast from "react-hot-toast";
+import { useAuth } from "../context/AuthProvider";
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -13,6 +14,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { setAuth } = useAuth();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -50,16 +52,18 @@ const Login = () => {
       const response = await apiClient.post(`/login`, formData);
 
       if (response.data.success) {
+        setAuth(response.data.user); // Update auth context
         toast.success(response.data.message);
-        navigate("/Home");
+        navigate("/home");
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Login failed");
-      
     } finally {
       setIsLoading(false);
     }
   };
+
+  
 
   return (
     <div className="flex justify-center items-center min-h-[93vh] font-sans p-4">

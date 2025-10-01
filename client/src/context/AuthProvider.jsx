@@ -16,14 +16,13 @@ const AuthContext = createContext();
 const AuthProvider = ({ children }) => {
   // State for storing authenticated user data
   const [auth, setAuth] = useState(null);
-
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setLoading] = useState(true);
 
   // Function to check if user is authenticated
   const checkAuth = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await apiClient.get(`/auth/current-user`);
+      const { data } = await apiClient.get(`/me`);
       setAuth(data.success ? data.user : null);
     } catch (err) {
       // On error, clear auth state
@@ -37,37 +36,25 @@ const AuthProvider = ({ children }) => {
   // Effect to check authentication status when component mounts
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
-
-  // Logout function
-  // const logout = useCallback(async () => {
-  //   try {
-  //     // Make API request to logout endpoint
-  //     await apiClient.post(`/auth/logout`);
-  //     setAuth(null);
-  //     navigate("/login");
-  //   } catch (err) {
-  //     toast.error("Logout failed", { position: "top-center" });
-  //     console.error("Logout error:", err);
-  //   }
-  // }, [navigate]); // Only recreate if navigate changes
+  }, []); // Remove checkAuth from dependencies
 
   // Memoized context value to prevent unnecessary re-renders
   const contextValue = useMemo(
     () => ({
       auth,
-      loading,
+      isLoading,
       isAuthenticated: !!auth, // Boolean indicating auth status
       checkAuth,
+      setAuth, // Include setAuth if you need to update auth state from other components
     }),
-    [auth, loading, checkAuth] // Only recalculate when these change
+    [auth, isLoading, checkAuth] // Include all dependencies that affect context value
   );
 
   // Render the provider with context value
   return (
     <AuthContext.Provider value={contextValue}>
-      {/* Show loading spinner or children based on loading state */}
-      {loading ? <Loading /> : children}
+      {/* Show isLoading spinner or children based on isLoading state */}
+      {isLoading ? <Loading /> : children}
     </AuthContext.Provider>
   );
 };

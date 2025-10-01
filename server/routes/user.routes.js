@@ -8,9 +8,10 @@ const {
   forgotPasswordController,
   resetPasswordController,
   logoutController,
+  refreshTokenController,
 } = require("../controllers/user.controller");
 const { body } = require("express-validator");
-const { authToken } = require("../middleware/verifyToken");
+const authToken = require("../middleware/verifyToken");
 
 const userRouter = express.Router();
 
@@ -54,6 +55,7 @@ userRouter.post("/reset-password/:token", resetPasswordController);
 // Get current user profile (protected route)  - access token verify here
 userRouter.get("/me", authToken, getMeController);
 
-// 
+// refresh token
+userRouter.post("/refresh-token", refreshTokenController);
 
 module.exports = userRouter;

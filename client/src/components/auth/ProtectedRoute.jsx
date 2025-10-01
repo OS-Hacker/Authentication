@@ -1,18 +1,30 @@
-// protectedRoutes.jsx
-import React from "react";
-import { Navigate } from "react-router-dom";
+// components/ProtectedRoute.jsx
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../context/AuthProvider";
+import Loading from "../../pages/Loading";
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+const ProtectedRoute = ({ children, requiredRoles = [] }) => {
+  const { isAuthenticated, auth, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) {
+    return <Loading />;
+  }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Redirect to login page with return url
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Check role-based access if required roles are specified
+  if (requiredRoles.length > 0 && auth?.role) {
+    const hasRequiredRole = requiredRoles.includes(auth.role);
+    if (!hasRequiredRole) {
+      return <Navigate to="/unauthorized" replace />;
+    }
   }
 
   return children;
 };
 
 export default ProtectedRoute;
-
-// - /home (Protected)

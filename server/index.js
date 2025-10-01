@@ -3,6 +3,7 @@ const connectDB = require("./db/connectDB");
 const cors = require("cors");
 const userRouter = require("./routes/user.routes");
 const { globalErrorHandler } = require("./middleware/globalErrorHandler");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
 
 const app = express();
@@ -29,7 +30,7 @@ connectDB();
 app.use("/api/v1/", userRouter);
 
 // global error handler
-app.use(globalErrorHandler)
+app.use(globalErrorHandler);
 
 // create server
 const PORT = process.env.PORT;

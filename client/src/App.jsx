@@ -1,3 +1,4 @@
+// App.jsx
 import React from "react";
 import {
   createBrowserRouter,
@@ -17,23 +18,20 @@ import AuthProvider from "./context/AuthProvider";
 import ForgotPassword from "./components/auth/ForgotPassword";
 import VerifyAccount from "./components/auth/VerifyAccount";
 import { Toaster } from "react-hot-toast";
+import ErrorPage from "./pages/ErrorPage";
+import Dashboard from "./pages/dashboard/Dashboard";
+import Unauthorized from "./pages/Unauthorized";
 
-const ErrorPage = () => (
-  <div>
-    <h1>404 Not Found</h1>
-    <p>Sorry, the page you are looking for does not exist.</p>
-  </div>
-);
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/login" replace />,
+    element: <Navigate to="/home" replace />,
     errorElement: <ErrorPage />,
   },
   {
     path: "/login",
     element: (
-      <PublicRoute>
+      <PublicRoute restricted>
         <Login />
       </PublicRoute>
     ),
@@ -41,7 +39,7 @@ const router = createBrowserRouter([
   {
     path: "/signup",
     element: (
-      <PublicRoute>
+      <PublicRoute restricted>
         <Signup />
       </PublicRoute>
     ),
@@ -49,7 +47,7 @@ const router = createBrowserRouter([
   {
     path: "/verify-email",
     element: (
-      <PublicRoute>
+      <PublicRoute restricted>
         <RequestVerification />
       </PublicRoute>
     ),
@@ -57,26 +55,47 @@ const router = createBrowserRouter([
   {
     path: "/verify-email/:token",
     element: (
-      <PublicRoute>
+      <PublicRoute restricted>
         <VerifyAccount />
       </PublicRoute>
     ),
   },
   {
     path: "/forgot-password",
-    element: <ForgotPassword />,
+    element: (
+      <PublicRoute restricted>
+        <ForgotPassword />
+      </PublicRoute>
+    ),
   },
   {
     path: "/reset-password/:token",
-    element: <ResetPassword />,
+    element: (
+      <PublicRoute restricted>
+        <ResetPassword />
+      </PublicRoute>
+    ),
   },
   {
     path: "/home",
     element: (
-      <>
+      <ProtectedRoute>
         <Home />
-      </>
+      </ProtectedRoute>
     ),
+  },
+  {
+    path: "/dashboard",
+    element: (
+      <ProtectedRoute requiredRoles={["admin", "user"]}>
+        {/* Example role protection */}
+        <Dashboard />
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/unauthorized",
+    element: <Unauthorized />,
   },
   {
     path: "*",
