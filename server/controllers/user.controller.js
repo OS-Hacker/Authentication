@@ -473,14 +473,19 @@ const refreshTokenController = async (req, res, next) => {
           return next(new ErrorHandler("Invalid refresh token", 401));
         }
 
+        console.log({
+          id: decoded?.id,
+          email: decoded?.email,
+        });
+
         // Generate new tokens
         const newAccessToken = generateAccessToken({
-          _id: decoded._id || decoded.id,
-          email: decoded.email,
+          id: decoded?.id,
+          email: decoded?.email,
         });
 
         const newRefreshToken = generateRefreshToken({
-          _id: decoded._id || decoded.id,
+          id: decoded.id,
           email: decoded.email,
         });
 
@@ -492,21 +497,24 @@ const refreshTokenController = async (req, res, next) => {
             expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
           }
         );
-
-        // Set new tokens in cookies
-        const cookieOptions = {
+        // Set secure HTTP-only cookie for access token
+        res.cookie("accessToken", newAccessToken, {
           httpOnly: true,
           sameSite: "strict",
-          maxAge: 7 * 24 * 60 * 60 * 1000,
-        };
+          maxAge: 15 * 60 * 1000, // 15 minutes
+        });
+
+        // Set secure HTTP-only cookie for refresh token
+        res.cookie("refreshToken", newRefreshToken, {
+          httpOnly: true,
+          sameSite: "strict",
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
 
         // Add secure flag in production
         // if (process.env.NODE_ENV === "production") {
         //   cookieOptions.secure = true;
         // }
-
-        res.cookie("refreshToken", newRefreshToken, cookieOptions);
-        res.cookie("accessToken", newAccessToken, cookieOptions);
 
         res.status(200).json({
           success: true,

@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema(
     emailVerificationTokenExpires: Date,
     passwordResetToken: String,
     passwordResetExpires: Date,
+    role: {
+      type: String,
+      enum: ["user", "admin", "moderator"], // Define allowed roles
+      default: "user",
+    },
   },
   {
     timestamps: true, // ✅ Add timestamps for createdAt, updatedAt

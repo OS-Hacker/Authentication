@@ -27,16 +27,14 @@ const Home = () => {
   }, []);
 
   return (
-    <div>
-      <div>
-        <p>Welcome, {auth?.userName}</p>
-        <button
-          onClick={logout}
-          className="bg-red-500 text-white p-2 rounded cursor-pointer"
-        >
-          Logout
-        </button>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
+      <p className="mb-4">Welcome, {auth?.userName}</p>
+      <button
+        onClick={logout}
+        className="bg-red-500 text-white p-2 rounded cursor-pointer"
+      >
+        Logout
+      </button>
     </div>
   );
 };

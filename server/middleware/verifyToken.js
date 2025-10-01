@@ -44,6 +44,8 @@ async function authToken(req, res, next) {
         id: decoded.id,
         email: decoded.email,
       };
+
+      console.log(req.user);
       next();
     });
   } catch (err) {
