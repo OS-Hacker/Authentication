@@ -1,5 +1,4 @@
 import React, { useCallback } from "react";
-import RequestVerification from "../components/auth/RequestVerification";
 import { useAuth } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/Api";

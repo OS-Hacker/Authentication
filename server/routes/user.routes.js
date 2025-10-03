@@ -2,9 +2,8 @@ const express = require("express");
 const {
   signupController,
   loginController,
-  verifyEmailController,
+  verifyTokenController,
   getMeController,
-  verifyUserAccountController,
   forgotPasswordController,
   resetPasswordController,
   logoutController,
@@ -42,10 +41,8 @@ userRouter.post(
 userRouter.delete("/logout", logoutController);
 
 // Varify Account By Email  Register -> send link to email ->
-// Send verification email
-userRouter.post("/verify-email", verifyUserAccountController);
 // Verify email via token
-userRouter.get("/verify-email/:token", verifyEmailController);
+userRouter.get("/verify-email/:token", verifyTokenController);
 
 // Password reset request
 userRouter.post("/forgot-password", forgotPasswordController);

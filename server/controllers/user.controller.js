@@ -10,6 +10,7 @@ const refreshTokenModel = require("../models/refreshToken.model");
 const {
   generateAccessToken,
   generateRefreshToken,
+  sendVerificationEmail,
 } = require("../utils/GenerateTokens");
 
 /**
@@ -54,6 +55,9 @@ const signupController = async (req, res, next) => {
     // Save user to database
     const savedUser = await newUser.save();
 
+    // Send verification email
+    await sendVerificationEmail(savedUser, req);
+
     // Prepare response without sensitive data
     const userResponse = {
       id: savedUser._id,
@@ -65,7 +69,8 @@ const signupController = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      message: "Registration successful",
+      message:
+        "Registration successful. Please check your email to verify your account.",
       user: userResponse,
     });
   } catch (error) {
@@ -74,116 +79,57 @@ const signupController = async (req, res, next) => {
   }
 };
 
-const verifyUserAccountController = async (req, res, next) => {
-  const { email } = req.body;
-
-  if (!email) {
-    return next(new ErrorHandler("email is required", 400));
-  }
-
-  // Validate email format
-  if (!email.includes("@")) {
-    return next(new ErrorHandler("Invalid recipient email address", 400));
-  }
-
-  try {
-    // Find user by email
-    const user = await userModel.findOne({ email });
-    if (!user) {
-      return next(new ErrorHandler("User not found", 404));
-    }
-
-    // Generate new verification token if not present or expired
-    let emailVerificationToken = user.emailVerificationToken;
-    if (
-      !emailVerificationToken ||
-      user.emailVerificationTokenExpires < Date.now()
-    ) {
-      emailVerificationToken = crypto.randomBytes(32).toString("hex");
-      user.emailVerificationToken = emailVerificationToken;
-      user.emailVerificationTokenExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-      await user.save();
-    }
-
-    // Create verification URL
-    const verificationUrl = `${req.protocol}://${req.get(
-      "host"
-    )}/api/v1/auth/verify-email/${emailVerificationToken}`;
-
-    // Send verification email
-    await sendEmail({
-      to: email,
-      subject: "Verify Your Email",
-      html: verifyAccountTemplate(email, verificationUrl),
-      text: `Please verify your email by visiting this link: ${verificationUrl}\n\nEmail: ${email}\nPassword: The password you entered during signup\n\nThis link expires in 24 hours.`,
-    });
-
-    return res.status(200).json({
-      success: true,
-      message: `Verification email sent to ${email}`,
-    });
-  } catch (emailError) {
-    console.log("Failed to send verification email:", emailError);
-    return next(new ErrorHandler("Failed to send verification email", 500));
-  }
-};
-
 /**
  * @desc    Verify user email
  * @route   GET /api/v1/auth/verify-email/:token
  * @access  Public
  */
-const verifyEmailController = async (req, res) => {
+
+// verify token they sended in email
+const verifyTokenController = async (req, res, next) => {
   try {
     const { token } = req.params;
 
-    // Find user by verification token
+    // Find user by verification token and check if token not expired
     const user = await userModel.findOne({
       emailVerificationToken: token,
       emailVerificationTokenExpires: { $gt: Date.now() },
     });
 
+    // If no user or token expired, send 400 error
     if (!user) {
-      return next(
-        new ErrorHandler("Invalid or expired verification token", 400)
-      );
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification token",
+      });
     }
 
-    // Update user as verified
+    // If user already verified, inform client gracefully
+    if (user.emailVerified) {
+      return res.status(200).json({
+        success: true,
+        message: "Email is already verified. You can proceed to login.",
+        alreadyVerified: true,
+      });
+    }
+
+    // Mark email as verified and clear verification fields
     user.emailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationTokenExpires = undefined;
     user.verifiedAt = new Date();
+
     await user.save();
 
-    // Create token payload
-    const tokenPayload = {
-      id: user._id,
-      email: user.email,
-      userName: user.userName,
-      role: user.role || "user",
-    };
-
-    // Generate JWT token
-    const authToken = JWT.sign(tokenPayload, process.env.JWT_SECRET, {
-      expiresIn: process.env.JWT_EXPIRES_IN,
-    });
-
-    // Set cookie and redirect for web clients
-    res.cookie("token", authToken, {
-      httpOnly: true,
-      sameSite: "strict",
-      maxAge: 3600000, // 1 hour
-    });
-
-    // For API clients
+    // Inform client of success
     return res.status(200).json({
       success: true,
       message: "Email successfully verified",
-      token: authToken,
     });
   } catch (error) {
-    next(new ErrorHandler(error));
+    // Log error, pass to error middleware
+    console.error("Error in verifyTokenController:", error);
+    return next(new ErrorHandler("Server error during verification", 500));
   }
 };
 
@@ -203,10 +149,19 @@ const loginController = async (req, res, next) => {
     // Find user by email
     const user = await userModel.findOne({ email });
 
-    console.log("user -", user);
-
     if (!user) {
       return next(new ErrorHandler("Invalid credentials", 400));
+    }
+
+    // Check if email is verified
+    if (!user.emailVerified) {
+      // Option 1: Block login completely
+      return next(
+        new ErrorHandler(
+          "Please verify your email address before logging in. Check your email for verification link.",
+          403
+        )
+      );
     }
 
     // Compare password using model method
@@ -564,9 +519,8 @@ const logoutController = async (req, res, next) => {
 module.exports = {
   signupController,
   loginController,
-  verifyEmailController,
+  verifyTokenController,
   getMeController,
-  verifyUserAccountController,
   forgotPasswordController,
   resetPasswordController,
   refreshTokenController,

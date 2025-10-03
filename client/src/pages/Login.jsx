@@ -63,8 +63,6 @@ const Login = () => {
     }
   };
 
-  
-
   return (
     <div className="flex justify-center items-center min-h-[93vh] font-sans p-4">
       <form
@@ -77,7 +75,8 @@ const Login = () => {
 
         {location.state?.registrationSuccess && (
           <div className="text-green-500 bg-green-500/10 p-3 rounded-md mb-6 text-center text-sm">
-            Registration successful! Please login.
+            Registration successful! Please <br />
+            verify Your Email.
           </div>
         )}
 

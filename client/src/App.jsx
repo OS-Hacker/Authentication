@@ -13,7 +13,6 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
 import ResetPassword from "./components/auth/ResetPassword";
-import RequestVerification from "./components/auth/RequestVerification";
 import AuthProvider from "./context/AuthProvider";
 import ForgotPassword from "./components/auth/ForgotPassword";
 import VerifyAccount from "./components/auth/VerifyAccount";
@@ -41,14 +40,6 @@ const router = createBrowserRouter([
     element: (
       <PublicRoute restricted>
         <Signup />
-      </PublicRoute>
-    ),
-  },
-  {
-    path: "/verify-email",
-    element: (
-      <PublicRoute restricted>
-        <RequestVerification />
       </PublicRoute>
     ),
   },
