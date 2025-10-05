@@ -2,16 +2,14 @@ const express = require("express");
 const {
   signupController,
   loginController,
-  verifyTokenController,
+  verifyEmailController,
   getMeController,
   forgotPasswordController,
   resetPasswordController,
   logoutController,
-  refreshTokenController,
 } = require("../controllers/user.controller");
 const { body } = require("express-validator");
-const authToken = require("../middleware/verifyToken");
-
+const { authenticate, verifyRefreshToken } = require("../middleware/verifyToken");
 const userRouter = express.Router();
 
 // User registration
@@ -42,7 +40,7 @@ userRouter.delete("/logout", logoutController);
 
 // Varify Account By Email  Register -> send link to email ->
 // Verify email via token
-userRouter.get("/verify-email/:token", verifyTokenController);
+userRouter.get("/verify-email/:token", verifyEmailController);
 
 // Password reset request
 userRouter.post("/forgot-password", forgotPasswordController);
@@ -50,9 +48,9 @@ userRouter.post("/forgot-password", forgotPasswordController);
 userRouter.post("/reset-password/:token", resetPasswordController);
 
 // Get current user profile (protected route)  - access token verify here
-userRouter.get("/me", authToken, getMeController);
+userRouter.get("/me", authenticate, getMeController);
 
 // refresh token
-userRouter.post("/refresh-token", refreshTokenController);
+userRouter.post("/refresh-token", verifyRefreshToken);
 
 module.exports = userRouter;

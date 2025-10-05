@@ -18,16 +18,14 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      minlength: 6, // ✅ Add minimum length
+      minlength: 8, // ✅ Add minimum length
     },
     emailVerified: {
       type: Boolean,
       default: false,
     },
-    emailVerificationToken: String,
-    emailVerificationTokenExpires: Date,
-    passwordResetToken: String,
-    passwordResetExpires: Date,
+    // Last login timestamp
+    lastLogin: Date,
     role: {
       type: String,
       enum: ["user", "admin", "moderator"], // Define allowed roles

@@ -61,11 +61,13 @@ const Signup = () => {
 
       if (data?.success) {
         toast.success(data.message);
-        navigate("/login", { state: { registrationSuccess: true } });
+        // Navigate to a friendly 'check your email' page and pass the email so
+        // the user sees where the verification link was sent.
+        navigate("/check-email", { state: { email: formData.email } });
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Signup failed");
-      console.log(error)
+      console.log(error);
     } finally {
       setIsLoading(false);
     }

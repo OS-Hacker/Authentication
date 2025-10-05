@@ -1,61 +1,136 @@
 const jwt = require("jsonwebtoken");
-const refreshTokenModel = require("../models/refreshToken.model");
-const {
-  generateAccessToken,
-  generateRefreshToken,
-} = require("../utils/GenerateTokens");
+const TokenModel = require("../models/Token.model");
+const userModel = require("../models/user.model");
 const { ErrorHandler } = require("../utils/ErrorHandler");
+const { storeRefreshToken } = require("../utils/GenerateTokens");
 
-// Verify access token middleware
-async function authToken(req, res, next) {
+// Verify Access Token
+const authenticate = async (req, res, next) => {
   try {
-    const accessToken =
-      req.cookies?.accessToken ||
-      req.headers.authorization?.replace("Bearer ", "");
+    const authHeader = req.headers.authorization;
 
-    console.log(accessToken);
-
-    if (!accessToken) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        message: "Access token required",
-        error: true,
         success: false,
+        message: "Access token required",
       });
     }
 
-    jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
-      if (err) {
-        if (err.name === "TokenExpiredError") {
-          return res.status(401).json({
-            message: "Access token expired",
-            error: true,
-            success: false,
-            code: "TOKEN_EXPIRED",
-          });
-        }
+    const accessToken = authHeader.split(" ")[1];
 
-        return res.status(401).json({
-          message: "Invalid access token",
-          error: true,
-          success: false,
-        });
-      }
-      req.user = {
-        id: decoded.id,
-        email: decoded.email,
-      };
+    const decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
 
-      console.log(req.user);
-      next();
-    });
-  } catch (err) {
+    // Check if user exists and is verified
+    const user = await userModel.findById(decoded.userId).select("-password");
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: "Please verify your email before accessing this resource",
+      });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    next(new ErrorHandler(error));
+
     res.status(500).json({
-      message: err.message || err,
-      data: [],
-      error: true,
       success: false,
+      message: "Authentication failed",
     });
   }
-}
+};
 
-module.exports = authToken;
+// Verify Refresh Token
+const verifyRefreshToken = async (req, res, next) => {
+  try {
+    const token = req.cookies.refreshToken;
+
+    if (!token) {
+      return next(new ErrorHandler("Refresh token required", 400));
+    }
+
+    const storedToken = await TokenModel.findOne({ token });
+    if (!storedToken) {
+      res.clearCookie("refreshToken");
+      res.clearCookie("accessToken");
+      return next(new ErrorHandler("Invalid refresh token", 400));
+    }
+
+    jwt.verify(
+      token,
+      process.env.REFRESH_TOKEN_SECRET,
+      async (err, decoded) => {
+        if (err) {
+          res.clearCookie("refreshToken");
+          res.clearCookie("accessToken");
+
+          if (err.name === "TokenExpiredError") {
+            await TokenModel.deleteOne({ token });
+            return next(new ErrorHandler("Refresh token expired", 401));
+          }
+
+          return next(new ErrorHandler("Invalid refresh token", 401));
+        }
+
+        // Generate new tokens
+        const newAccessToken = generateAccessToken({
+          id: decoded?.id,
+          email: decoded?.email,
+        });
+
+        const newRefreshToken = generateRefreshToken({
+          id: decoded.id,
+          email: decoded.email,
+        });
+
+        // Update refresh token in database
+        // Invalidate previous token and store new one
+        await storeRefreshToken(storedToken.userId, newRefreshToken);
+
+        // Set HTTP-only cookie for refresh token
+        res.cookie("refreshToken", newRefreshToken, {
+          httpOnly: true,
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+          secure: process.env.NODE_ENV === "production",
+          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
+        res.status(200).json({
+          success: true,
+          message: "Tokens refreshed successfully",
+          accessToken: newAccessToken,
+        });
+      }
+    );
+  } catch (error) {
+    console.error("Refresh token error:", error);
+    return next(new ErrorHandler("Internal server error", 500));
+  }
+};
+
+// Role-based authorization
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permissions to access this resource",
+      });
+    }
+    next();
+  };
+};
+
+module.exports = {
+  authenticate,
+  verifyRefreshToken,
+  authorize,
+};

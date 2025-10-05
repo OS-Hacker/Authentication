@@ -7,37 +7,27 @@ const VerifyAccount = () => {
   const { token } = useParams();
   const navigate = useNavigate();
 
-  const [status, setStatus] = useState("loading"); // loading, success, error
+  const [status, setStatus] = useState("varifying..."); // loading, success, error
   const [message, setMessage] = useState("");
-  const [countdown, setCountdown] = useState(30);
+  const [countdown, setCountdown] = useState(10);
 
   // Email verification request effect
   useEffect(() => {
-    let isMounted = true;
     const verify = async () => {
       if (!token) return;
-
       try {
         const res = await apiClient.get(`/verify-email/${token}`);
-        if (isMounted) {
-          setStatus("success");
-          setMessage(res.data.message);
-        }
+        setStatus("success");
+        setMessage(res.data.message);
       } catch (err) {
-        if (isMounted) {
-          setStatus("error");
-          setMessage(
-            err.response?.data?.message ||
-              "Verification failed or link expired."
-          );
-        }
+        setStatus("error");
+        setMessage(
+          err.response?.data?.message || "Verification failed or link expired."
+        );
       }
     };
-    verify();
 
-    return () => {
-      isMounted = false;
-    };
+    verify();
   }, [token]);
 
   // Countdown timer for success redirect

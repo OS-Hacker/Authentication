@@ -16,6 +16,7 @@ import ResetPassword from "./components/auth/ResetPassword";
 import AuthProvider from "./context/AuthProvider";
 import ForgotPassword from "./components/auth/ForgotPassword";
 import VerifyAccount from "./components/auth/VerifyAccount";
+import CheckEmailTem from "./components/auth/CheckEmailTem";
 import { Toaster } from "react-hot-toast";
 import ErrorPage from "./pages/ErrorPage";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -56,6 +57,14 @@ const router = createBrowserRouter([
     element: (
       <PublicRoute restricted>
         <ForgotPassword />
+      </PublicRoute>
+    ),
+  },
+  {
+    path: "/check-email",
+    element: (
+      <PublicRoute restricted>
+        <CheckEmailTem />
       </PublicRoute>
     ),
   },

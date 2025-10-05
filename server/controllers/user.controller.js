@@ -6,12 +6,16 @@ const crypto = require("crypto");
 const sendEmail = require("../utils/SendEmail");
 const forgotPasswordTemplate = require("../templates/ForgotPasswordTemplate");
 const { ErrorHandler } = require("../utils/ErrorHandler");
-const refreshTokenModel = require("../models/refreshToken.model");
 const {
   generateAccessToken,
   generateRefreshToken,
   sendVerificationEmail,
+  storeEmailToken,
+  generateEmailToken,
+  generateResetPasswordToken,
 } = require("../utils/GenerateTokens");
+const TokenModel = require("../models/Token.model");
+const { storeRefreshToken } = require("../utils/GenerateTokens");
 
 /**
  * @desc    Register a new user
@@ -35,28 +39,23 @@ const signupController = async (req, res, next) => {
       );
     }
 
-    const EMAIL_VERIFICATION_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in ms
-
-    // Create email verification token
-    const emailVerificationToken = crypto.randomBytes(32).toString("hex");
-    const emailVerificationTokenExpires =
-      Date.now() + EMAIL_VERIFICATION_EXPIRY;
-
     // Create new user
     const newUser = new userModel({
       userName,
       email,
       password, // Will be hashed by pre-save middleware
       emailVerified: false,
-      emailVerificationToken,
-      emailVerificationTokenExpires,
     });
 
     // Save user to database
     const savedUser = await newUser.save();
 
+    // Generate email verification token
+    const emailToken = generateEmailToken(savedUser._id);
+    await storeEmailToken(savedUser._id, emailToken);
+
     // Send verification email
-    await sendVerificationEmail(savedUser, req);
+    await sendVerificationEmail(emailToken, req.body.email);
 
     // Prepare response without sensitive data
     const userResponse = {
@@ -86,52 +85,62 @@ const signupController = async (req, res, next) => {
  */
 
 // verify token they sended in email
-const verifyTokenController = async (req, res, next) => {
+const verifyEmailController = async (req, res, next) => {
   try {
     const { token } = req.params;
-
-    // Find user by verification token and check if token not expired
-    const user = await userModel.findOne({
-      emailVerificationToken: token,
-      emailVerificationTokenExpires: { $gt: Date.now() },
-    });
-
-    // If no user or token expired, send 400 error
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired verification token",
-      });
+    
+    if (!token) {
+      return next(new ErrorHandler("Verification token is required", 400));
     }
 
-    // If user already verified, inform client gracefully
+    let decoded;
+    try {
+      decoded = JWT.verify(token, process.env.EMAIL_TOKEN_SECRET);
+    } catch (jwtError) {
+      return next(new ErrorHandler("Invalid or expired token", 400));
+    }
+    
+    // Find token in database
+    const tokenRecord = await TokenModel.findOne({
+      userId: decoded.id,
+      token,
+      type: "email-verification",
+      expiresAt: { $gt: new Date() },
+    });
+    
+    if (!tokenRecord) {
+      return next(new ErrorHandler("Invalid or expired token", 400));
+    }
+    
+    // Find user and update emailVerified status
+    const user = await userModel.findById(decoded.id);
+
+    if (!user) {
+      return next(new ErrorHandler("User not found", 404));
+    }
+    
     if (user.emailVerified) {
       return res.status(200).json({
         success: true,
-        message: "Email is already verified. You can proceed to login.",
-        alreadyVerified: true,
+        message: "Email is already verified. Please log in.",
       });
     }
-
-    // Mark email as verified and clear verification fields
+    
     user.emailVerified = true;
-    user.emailVerificationToken = undefined;
-    user.emailVerificationTokenExpires = undefined;
-    user.verifiedAt = new Date();
-
     await user.save();
 
-    // Inform client of success
+    // Remove used token
+    await TokenModel.findByIdAndDelete(tokenRecord._id);
+
     return res.status(200).json({
       success: true,
-      message: "Email successfully verified",
+      message: "Email verified successfully. You can now log in.",
     });
   } catch (error) {
-    // Log error, pass to error middleware
-    console.error("Error in verifyTokenController:", error);
-    return next(new ErrorHandler("Server error during verification", 500));
+    next(new ErrorHandler(error));
   }
 };
+
 
 /**
  * @desc    Authenticate user and get token
@@ -148,6 +157,8 @@ const loginController = async (req, res, next) => {
 
     // Find user by email
     const user = await userModel.findOne({ email });
+
+    console.log(user);
 
     if (!user) {
       return next(new ErrorHandler("Invalid credentials", 400));
@@ -178,30 +189,19 @@ const loginController = async (req, res, next) => {
       userName: user.userName,
     };
 
-    console.log("tokenPayload -", tokenPayload);
-
     // Generate access and refresh tokens
     const accessToken = generateAccessToken(tokenPayload);
     const refreshToken = generateRefreshToken(tokenPayload);
 
-    // Store refresh token in DB
-    await refreshTokenModel.create({
-      user: user._id,
-      token: refreshToken,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-    });
+    // Store refresh token in DB (invalidate previous ones)
+    await storeRefreshToken(user._id, refreshToken);
 
-    // Set secure HTTP-only cookie for access token
-    res.cookie("accessToken", accessToken, {
-      httpOnly: true,
-      sameSite: "strict",
-      maxAge: 15 * 60 * 1000, // 15 minutes
-    });
-
-    // Set secure HTTP-only cookie for refresh token
+    // Cookie options - adapt for development vs production
+    // Set HTTP-only cookie for refresh token
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      secure: process.env.NODE_ENV === "production", // secure cookies require HTTPS
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
@@ -222,6 +222,7 @@ const loginController = async (req, res, next) => {
       success: true,
       message: "Login successful",
       user: userResponse,
+      accessToken,
     });
   } catch (error) {
     next(new ErrorHandler(error));
@@ -239,43 +240,30 @@ const forgotPasswordController = async (req, res, next) => {
 
     // Validate email input
     if (!email) {
-      return next(new ErrorHandler("email is required", 400));
+      return next(new ErrorHandler("Email is required", 400));
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return next(
+        new ErrorHandler("Please provide a valid email address", 400)
+      );
     }
 
     // Check if user exists
     const user = await userModel.findOne({ email });
     if (!user) {
       // Don't reveal whether email exists for security
-      return next(
-        new ErrorHandler(
-          "If your email exists, you'll receive a password reset link",
-          400
-        )
-      );
+      return res.status(200).json({
+        success: true,
+        message:
+          "If your email exists in our system, you'll receive a password reset link shortly",
+      });
     }
 
     // Generate reset token
-    const resetToken = crypto.randomBytes(32).toString("hex");
-
-    const passwordResetToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
-
-    const PASSWORD_RESET_EXPIRY = 15 * 60 * 1000; // 15 min
-
-    // Set token expiry (15 minutes from now)
-    const passwordResetExpires = Date.now() + PASSWORD_RESET_EXPIRY;
-
-    // Save token to database
-    user.passwordResetToken = passwordResetToken;
-    user.passwordResetExpires = passwordResetExpires;
-    await user.save();
-
-    // Create reset URL
-    // const resetUrl = `${req.protocol}://${req.get(
-    //   "host"
-    // )}/reset-password/${resetToken}`;
+    const resetToken = await generateResetPasswordToken(user._id);
 
     // Use dynamic frontend URL from environment variable
     const FRONTEND_BASE_URL =
@@ -297,15 +285,22 @@ const forgotPasswordController = async (req, res, next) => {
         message: "Password reset token sent to email",
       });
     } catch (emailError) {
-      // Clear the reset token if email fails
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save();
+      // Clean up the token if email fails
+      await TokenModel.findOneAndDelete({ token: resetToken });
 
-      return next(new ErrorHandler("Failed to send password reset email", 400));
+      console.error("Email sending failed:", emailError);
+      return next(
+        new ErrorHandler(
+          "Failed to send password reset email. Please try again.",
+          500
+        )
+      );
     }
   } catch (error) {
-    next(new ErrorHandler(error));
+    console.error("Forgot password error:", error);
+    next(
+      new ErrorHandler("An error occurred while processing your request", 500)
+    );
   }
 };
 
@@ -319,6 +314,13 @@ const resetPasswordController = async (req, res, next) => {
     const { token } = req.params;
     const { password } = req.body;
 
+    console.log("password -", password);
+
+    // Validate token presence
+    if (!token) {
+      return next(new ErrorHandler("Reset token is required", 400));
+    }
+
     // Validate password
     if (!password || password.length < 8) {
       return next(
@@ -326,16 +328,13 @@ const resetPasswordController = async (req, res, next) => {
       );
     }
 
-    // Hash the incoming token to compare with database
-    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    // Verify token validity
+    let decoded;
 
-    // Find user with matching token that hasn't expired
-    const user = await userModel.findOne({
-      passwordResetToken: hashedToken,
-      passwordResetExpires: { $gt: Date.now() },
-    });
-
-    if (!user) {
+    try {
+      decoded = JWT.verify(token, process.env.RESET_PASSWORD_TOKEN_SECRET);
+    } catch (jwtError) {
+      await TokenModel.findOneAndDelete({ token });
       return next(
         new ErrorHandler(
           "Invalid or expired token. Please request a new reset link.",
@@ -344,30 +343,82 @@ const resetPasswordController = async (req, res, next) => {
       );
     }
 
-    const saltRounds = parseInt(process.env.SALT_ROUNDS, 10);
+    // Find valid token in database
+    const tokenRecord = await TokenModel.findOne({
+      token,
+      type: "reset-password",
+      expiresAt: { $gt: new Date() },
+    });
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    if (!tokenRecord) {
+      return next(
+        new ErrorHandler(
+          "Invalid or expired token. Please request a new reset link.",
+          400
+        )
+      );
+    }
 
-    // Update user password and clear reset token
-    user.password = hashedPassword;
-    user.passwordResetToken = undefined;
-    user.passwordResetExpires = undefined;
+    // Find user
+    const user = await userModel.findById(tokenRecord.userId);
+
+    if (!user) {
+      await TokenModel.findOneAndDelete({ token });
+      return next(
+        new ErrorHandler(
+          "User not found. Please request a new reset link.",
+          400
+        )
+      );
+    }
+
+    // Check if new password is different from current password
+    const isSamePassword = await bcrypt.compare(password, user.password);
+    if (isSamePassword) {
+      return next(
+        new ErrorHandler(
+          "New password cannot be the same as current password",
+          400
+        )
+      );
+    }
+
+    // Assign the plain password and let the user schema pre-save middleware
+    // hash it once. This prevents double-hashing which would make the
+    // password invalid when comparing during login.
+    user.password = password;
     await user.save();
 
+    // Clean up used token
+    await TokenModel.findOneAndDelete({ token });
+
     // Send confirmation email
-    await sendEmail({
-      to: user.email,
-      subject: "Password Changed Successfully",
-      html: `<p>Your password has been successfully changed.</p>`,
-    });
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Password Changed Successfully",
+        html: `
+          <div>
+            <h2>Password Changed Successfully</h2>
+            <p>Your password has been successfully changed.</p>
+            <p>If you did not make this change, please contact support immediately.</p>
+          </div>
+        `,
+      });
+    } catch (emailError) {
+      console.error("Confirmation email failed:", emailError);
+      // Don't fail the request if confirmation email fails
+    }
 
     return res.status(200).json({
       success: true,
       message: "Password updated successfully",
     });
   } catch (error) {
-    next(new ErrorHandler(error));
+    console.error("Reset password error:", error);
+    next(
+      new ErrorHandler("An error occurred while resetting your password", 500)
+    );
   }
 };
 
@@ -394,118 +445,24 @@ const getMeController = async (req, res, next) => {
   }
 };
 
-// when user access token expire
-const refreshTokenController = async (req, res, next) => {
-  try {
-    const token = req.cookies.refreshToken;
-
-    console.log(token);
-
-    if (!token) {
-      return next(new ErrorHandler("Refresh token required", 400));
-    }
-
-    const storedToken = await refreshTokenModel.findOne({ token });
-    if (!storedToken) {
-      res.clearCookie("refreshToken");
-      res.clearCookie("accessToken");
-      return next(new ErrorHandler("Invalid refresh token", 400));
-    }
-
-    JWT.verify(
-      token,
-      process.env.REFRESH_TOKEN_SECRET,
-      async (err, decoded) => {
-        if (err) {
-          res.clearCookie("refreshToken");
-          res.clearCookie("accessToken");
-
-          if (err.name === "TokenExpiredError") {
-            await refreshTokenModel.deleteOne({ token });
-            return next(new ErrorHandler("Refresh token expired", 401));
-          }
-
-          return next(new ErrorHandler("Invalid refresh token", 401));
-        }
-
-        console.log({
-          id: decoded?.id,
-          email: decoded?.email,
-        });
-
-        // Generate new tokens
-        const newAccessToken = generateAccessToken({
-          id: decoded?.id,
-          email: decoded?.email,
-        });
-
-        const newRefreshToken = generateRefreshToken({
-          id: decoded.id,
-          email: decoded.email,
-        });
-
-        // Update refresh token in database
-        await refreshTokenModel.findOneAndUpdate(
-          { token },
-          {
-            token: newRefreshToken,
-            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          }
-        );
-        // Set secure HTTP-only cookie for access token
-        res.cookie("accessToken", newAccessToken, {
-          httpOnly: true,
-          sameSite: "strict",
-          maxAge: 15 * 60 * 1000, // 15 minutes
-        });
-
-        // Set secure HTTP-only cookie for refresh token
-        res.cookie("refreshToken", newRefreshToken, {
-          httpOnly: true,
-          sameSite: "strict",
-          maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        });
-
-        // Add secure flag in production
-        // if (process.env.NODE_ENV === "production") {
-        //   cookieOptions.secure = true;
-        // }
-
-        res.status(200).json({
-          success: true,
-          message: "Tokens refreshed successfully",
-          // Optionally return the new access token in response body too
-          // accessToken: newAccessToken,
-        });
-      }
-    );
-  } catch (error) {
-    console.error("Refresh token error:", error);
-    return next(new ErrorHandler("Internal server error", 500));
-  }
-};
-
+// logout controller
 const logoutController = async (req, res, next) => {
   try {
     const token = req.cookies.refreshToken;
 
     if (token) {
       // Remove token from database
-      await refreshTokenModel.deleteOne({ token });
+      await TokenModel.deleteOne({ token });
     }
 
     // Clear cookies
-    res.clearCookie("refreshToken", {
+    const cookieClearOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    };
 
-    res.clearCookie("accessToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-    });
+    res.clearCookie("refreshToken", cookieClearOptions);
 
     res.status(200).json({
       success: true,
@@ -519,10 +476,9 @@ const logoutController = async (req, res, next) => {
 module.exports = {
   signupController,
   loginController,
-  verifyTokenController,
+  verifyEmailController,
   getMeController,
   forgotPasswordController,
   resetPasswordController,
-  refreshTokenController,
   logoutController,
 };

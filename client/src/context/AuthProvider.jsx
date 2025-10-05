@@ -1,4 +1,4 @@
-// Import necessary React hooks and other dependencies
+// src/context/AuthContext.jsx
 import React, {
   createContext,
   useCallback,
@@ -8,67 +8,60 @@ import React, {
   useMemo,
 } from "react";
 import Loading from "../pages/Loading";
-import apiClient from "../services/Api";
+import { authAPI } from "../services/Api";
 
-// Create an authentication context to share auth state across components
 const AuthContext = createContext();
 
 const AuthProvider = ({ children }) => {
-  // State for storing authenticated user data
   const [auth, setAuth] = useState(null);
-  const [isLoading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Function to check if user is authenticated
+  // ✅ useCallback ensures stable reference
   const checkAuth = useCallback(async () => {
-    setLoading(true);
     try {
-      const { data } = await apiClient.get(`/me`);
-      setAuth(data.success ? data.user : null);
-    } catch (err) {
-      // On error, clear auth state
+      const data = await authAPI.getCurrentUser();
+      if (data?.success && data.user) {
+        setAuth(data.user);
+      } else {
+        setAuth(null);
+      }
+    } catch (error) {
+      console.error("Auth check failed:", error);
       setAuth(null);
-      console.error("Auth check failed:", err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, []); // Empty dependency array means this is created once
+  }, []);
 
-  // Effect to check authentication status when component mounts
+  // ✅ run only once on mount
   useEffect(() => {
     checkAuth();
-  }, []); // Remove checkAuth from dependencies
+  }, [checkAuth]);
 
-  // Memoized context value to prevent unnecessary re-renders
-  const contextValue = useMemo(
+  // ✅ useMemo prevents unnecessary context re-creation
+  const value = useMemo(
     () => ({
       auth,
       isLoading,
-      isAuthenticated: !!auth, // Boolean indicating auth status
+      isAuthenticated: !!auth,
       checkAuth,
-      setAuth, // Include setAuth if you need to update auth state from other components
+      setAuth,
     }),
-    [auth, isLoading, checkAuth] // Include all dependencies that affect context value
+    [auth, isLoading, checkAuth]
   );
 
-  // Render the provider with context value
-  return (
-    <AuthContext.Provider value={contextValue}>
-      {/* Show isLoading spinner or children based on isLoading state */}
-      {isLoading ? <Loading /> : children}
-    </AuthContext.Provider>
-  );
+  if (isLoading) return <Loading />;
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-
-// Export the provider component
-export default AuthProvider;
-
+// Hook for consuming the AuthContext
 // eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
-  // Get context from nearest AuthProvider
   const context = useContext(AuthContext);
-  // Throw error if used outside AuthProvider
   if (!context) {
     throw new Error("useAuth must be used within an AuthProvider");
   }
-  return context; // Return auth context values
+  return context;
 };
+
+export default AuthProvider;

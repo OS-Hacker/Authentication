@@ -27,7 +27,7 @@ app.use(cookieParser());
 connectDB();
 
 // routes
-app.use("/api/v1/", userRouter);
+app.use("/api/v1/auth", userRouter);
 
 // global error handler
 app.use(globalErrorHandler);
