@@ -64,11 +64,7 @@ api.interceptors.response.use(
           .catch((err) => Promise.reject(err));
       }
 
-      // No refresh in progress — create one and store its promise so other
-      // concurrent handlers can await it instead of initiating a second call.
-      console.debug(
-        "Api: creating new refreshPromise -> POST /auth/refresh-token"
-      );
+      // Otherwise, create a new refresh request and hold its promise
       refreshPromise = api
         .post(`${import.meta.env.VITE_API_BASE_URL}/auth/refresh-token`, null, {
           skipAuthRefresh: true,

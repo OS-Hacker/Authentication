@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthProvider";
 import api from "../services/Api";
@@ -13,7 +13,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  // const location = useLocation(); 
+  // const location = useLocation();
   const { setAuth } = useAuth();
 
   const handleChange = (e) => {
@@ -49,7 +49,10 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const { data } = await api.post(`/auth/login`, formData);
+      const { data } = await api.post(
+        `${import.meta.env.VITE_API_BASE_URL}/auth/login`,
+        formData
+      );
 
       if (data?.success) {
         setAuth(data?.user); // Update auth context
