@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import apiClient from "../services/Api";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthProvider";
+import api from "../services/Api";
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -13,7 +13,7 @@ const Login = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
+  // const location = useLocation(); 
   const { setAuth } = useAuth();
 
   const handleChange = (e) => {
@@ -49,11 +49,11 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const response = await apiClient.post(`/login`, formData);
+      const { data } = await api.post(`/auth/login`, formData);
 
-      if (response.data.success) {
-        setAuth(response.data.user); // Update auth context
-        toast.success(response.data.message);
+      if (data?.success) {
+        setAuth(data?.user); // Update auth context
+        toast.success(data.message);
         navigate("/home");
       }
     } catch (error) {
@@ -73,12 +73,12 @@ const Login = () => {
           Login
         </h1>
 
-        {location.state?.registrationSuccess && (
+        {/* {location.state?.registrationSuccess && (
           <div className="text-green-500 bg-green-500/10 p-3 rounded-md mb-6 text-center text-sm">
             Registration successful! Please <br />
             verify Your Email.
           </div>
-        )}
+        )} */}
 
         {/* Email */}
         <div className="mb-6">

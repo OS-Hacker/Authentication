@@ -2,7 +2,11 @@ const jwt = require("jsonwebtoken");
 const TokenModel = require("../models/Token.model");
 const userModel = require("../models/user.model");
 const { ErrorHandler } = require("../utils/ErrorHandler");
-const { storeRefreshToken } = require("../utils/GenerateTokens");
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  storeRefreshToken,
+} = require("../utils/GenerateTokens");
 
 // Verify Access Token
 const authenticate = async (req, res, next) => {
@@ -21,7 +25,7 @@ const authenticate = async (req, res, next) => {
     const decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
 
     // Check if user exists and is verified
-    const user = await userModel.findById(decoded.userId).select("-password");
+    const user = await userModel.findById(decoded.id).select("-password");
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -29,7 +33,8 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    if (!user.isVerified) {
+    // model uses emailVerified field
+    if (!user.emailVerified) {
       return res.status(403).json({
         success: false,
         message: "Please verify your email before accessing this resource",
@@ -39,12 +44,10 @@ const authenticate = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    next(new ErrorHandler(error));
-
-    res.status(500).json({
-      success: false,
-      message: "Authentication failed",
-    });
+    // Forward the error to the global error handler
+    return next(
+      new ErrorHandler(error.message || "Authentication failed", 500)
+    );
   }
 };
 
@@ -80,10 +83,12 @@ const verifyRefreshToken = async (req, res, next) => {
           return next(new ErrorHandler("Invalid refresh token", 401));
         }
 
-        // Generate new tokens
+        console.log("Decoded refresh token:", decoded);
+
+        // Generate new tokens using the exported helpers
         const newAccessToken = generateAccessToken({
-          id: decoded?.id,
-          email: decoded?.email,
+          id: decoded.id,
+          email: decoded.email,
         });
 
         const newRefreshToken = generateRefreshToken({
@@ -92,7 +97,6 @@ const verifyRefreshToken = async (req, res, next) => {
         });
 
         // Update refresh token in database
-        // Invalidate previous token and store new one
         await storeRefreshToken(storedToken.userId, newRefreshToken);
 
         // Set HTTP-only cookie for refresh token
@@ -103,7 +107,8 @@ const verifyRefreshToken = async (req, res, next) => {
           maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         });
 
-        res.status(200).json({
+        // respond with access token and return
+        return res.status(200).json({
           success: true,
           message: "Tokens refreshed successfully",
           accessToken: newAccessToken,

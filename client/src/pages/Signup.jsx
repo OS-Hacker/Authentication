@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import apiClient from "../services/Api";
+import axios from "axios";
 
 // The Standard Flow: Registration -> Verification -> Login -> Tokens
-
 const Signup = () => {
   const [formData, setFormData] = useState({
     userName: "",
@@ -57,12 +56,13 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      const { data } = await apiClient.post(`/signup`, formData);
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_API_BASE_URL}/auth/signup`,
+        formData
+      );
 
       if (data?.success) {
         toast.success(data.message);
-        // Navigate to a friendly 'check your email' page and pass the email so
-        // the user sees where the verification link was sent.
         navigate("/check-email", { state: { email: formData.email } });
       }
     } catch (error) {

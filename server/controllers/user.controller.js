@@ -88,7 +88,7 @@ const signupController = async (req, res, next) => {
 const verifyEmailController = async (req, res, next) => {
   try {
     const { token } = req.params;
-    
+
     if (!token) {
       return next(new ErrorHandler("Verification token is required", 400));
     }
@@ -99,38 +99,44 @@ const verifyEmailController = async (req, res, next) => {
     } catch (jwtError) {
       return next(new ErrorHandler("Invalid or expired token", 400));
     }
-    
+
+    console.log("decoded - ", decoded);
+
     // Find token in database
     const tokenRecord = await TokenModel.findOne({
-      userId: decoded.id,
+      userId: decoded?.userId,
       token,
       type: "email-verification",
       expiresAt: { $gt: new Date() },
     });
-    
+
+    console.log("tokenRecord - ", tokenRecord);
+
     if (!tokenRecord) {
       return next(new ErrorHandler("Invalid or expired token", 400));
     }
-    
+
     // Find user and update emailVerified status
-    const user = await userModel.findById(decoded.id);
+    const user = await userModel.findById(decoded.userId);
+
+    console.log("user - ", user);
 
     if (!user) {
       return next(new ErrorHandler("User not found", 404));
     }
-    
+
     if (user.emailVerified) {
       return res.status(200).json({
         success: true,
         message: "Email is already verified. Please log in.",
       });
     }
-    
+
     user.emailVerified = true;
     await user.save();
 
     // Remove used token
-    await TokenModel.findByIdAndDelete(tokenRecord._id);
+    // await TokenModel.findByIdAndDelete(tokenRecord?._id);
 
     return res.status(200).json({
       success: true,
@@ -140,7 +146,6 @@ const verifyEmailController = async (req, res, next) => {
     next(new ErrorHandler(error));
   }
 };
-
 
 /**
  * @desc    Authenticate user and get token
@@ -194,15 +199,18 @@ const loginController = async (req, res, next) => {
     const refreshToken = generateRefreshToken(tokenPayload);
 
     // Store refresh token in DB (invalidate previous ones)
-    await storeRefreshToken(user._id, refreshToken);
+    await storeRefreshToken(user.id, refreshToken);
 
     // Cookie options - adapt for development vs production
     // Set HTTP-only cookie for refresh token
+    // Cookie options - adapt for development vs production
+    const isProduction = process.env.NODE_ENV === "production";
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      secure: process.env.NODE_ENV === "production", // secure cookies require HTTPS
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction, // secure cookies only over HTTPS in production
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: "/",
     });
 
     // Prepare user response without sensitive data
@@ -448,23 +456,26 @@ const getMeController = async (req, res, next) => {
 // logout controller
 const logoutController = async (req, res, next) => {
   try {
-    const token = req.cookies.refreshToken;
+    const token = req.cookies?.refreshToken;
 
-    if (token) {
-      // Remove token from database
-      await TokenModel.deleteOne({ token });
-    }
-
-    // Clear cookies
-    const cookieClearOptions = {
+    // Determine cookie options the same way we set them during login
+    const isProduction = process.env.NODE_ENV === "production";
+    const cookieOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
+      path: "/",
     };
 
-    res.clearCookie("refreshToken", cookieClearOptions);
+    if (token) {
+      // Remove the refresh-token record (only for refresh-token type)
+      await TokenModel.findOneAndDelete({ token, type: "refresh-token" });
+    }
 
-    res.status(200).json({
+    // Clear cookie using matching options so the browser will remove it
+    res.clearCookie("refreshToken", cookieOptions);
+
+    return res.status(200).json({
       success: true,
       message: "Logged out successfully",
     });

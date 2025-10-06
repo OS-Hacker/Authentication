@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import apiClient from "../../services/Api";
+import axios from "axios";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -19,18 +19,20 @@ const ForgotPassword = () => {
     }
 
     try {
-      const response = await apiClient.post("/forgot-password", { email });
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_API_BASE_URL}/auth/forgot-password`,
+        { email }
+      );
 
-      if (response?.data?.success) {
+      if (data?.success) {
         setEmail("");
-        toast.success(response?.data?.message);
+        toast.success(data.message);
       } else {
-        toast.error(response.data.message || "Failed to send reset email");
+        toast.error(data?.message || "Failed to send reset email");
       }
     } catch (error) {
-      const message =
-        error.response?.data?.message || "An error occurred. Please try again.";
-      toast.error(message);
+      const message = error.response?.data?.message || error.message;
+      toast.error(message || "An error occurred. Please try again.");
     } finally {
       setLoading(false);
     }

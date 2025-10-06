@@ -1,24 +1,26 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { CheckCircle, XCircle, Loader2, MailCheck } from "lucide-react";
-import apiClient from "../../services/Api";
+import axios from "axios";
 
 const VerifyAccount = () => {
   const { token } = useParams();
   const navigate = useNavigate();
 
-  const [status, setStatus] = useState("varifying..."); // loading, success, error
+  const [status, setStatus] = useState("verifying..."); // loading, success, error
   const [message, setMessage] = useState("");
-  const [countdown, setCountdown] = useState(10);
+  const [countdown, setCountdown] = useState(5); // seconds
 
   // Email verification request effect
   useEffect(() => {
     const verify = async () => {
       if (!token) return;
       try {
-        const res = await apiClient.get(`/verify-email/${token}`);
+        const { data } = await axios.get(
+          `${import.meta.env.VITE_API_BASE_URL}/auth/verify-email/${token}`
+        );
         setStatus("success");
-        setMessage(res.data.message);
+        setMessage(data.message);
       } catch (err) {
         setStatus("error");
         setMessage(
@@ -34,7 +36,7 @@ const VerifyAccount = () => {
   useEffect(() => {
     if (status !== "success") return;
 
-    setCountdown(30); // reset
+    setCountdown(5); // reset
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {

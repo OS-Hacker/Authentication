@@ -1,8 +1,8 @@
 import React, { useCallback } from "react";
 import { useAuth } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
-import apiClient from "../services/Api";
 import toast from "react-hot-toast";
+import api from "../services/Api";
 
 const Home = () => {
   const { auth, setAuth } = useAuth();
@@ -11,11 +11,10 @@ const Home = () => {
   // Logout function
   const logout = useCallback(async () => {
     try {
-      // Make API request to logout endpoint
-      await apiClient.delete(`/logout`);
+      // Make API request to logout endpoint using `api` which sets withCredentials
+      await api.delete(`/auth/logout`);
       setAuth(null);
-      // If you're using react-router, you might need to use useNavigate hook
-      // navigate("/login");
+
       navigate("/login");
       toast.success("Logged out successfully");
     } catch (err) {
@@ -23,7 +22,7 @@ const Home = () => {
       // Even if API call fails, clear local auth state
       setAuth(null);
     }
-  }, []);
+  }, [navigate, setAuth]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">

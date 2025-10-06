@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import apiClient from "../../services/Api";
+import axios from "axios";
 
 const ResetPassword = () => {
   const { token } = useParams();
@@ -27,20 +27,22 @@ const ResetPassword = () => {
     }
 
     try {
-      const response = await apiClient.post(`/reset-password/${token}`, {
-        password,
-      });
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_API_BASE_URL}/auth/reset-password/${token}`,
+        {
+          password,
+        }
+      );
 
-      if (response.data.success) {
+      if (data?.success) {
         toast.success("Password reset successfully!");
         setTimeout(() => navigate("/login"), 2000);
       } else {
-        toast.error(response.data.message || "Password reset failed");
+        toast.error(data?.message || "Password reset failed");
       }
     } catch (error) {
-      const message =
-        error.response?.data?.message || "Invalid or expired token";
-      toast.error(message);
+      const message = error.response?.data?.message || error.message;
+      toast.error(message || "Invalid or expired token");
     } finally {
       setLoading(false);
     }

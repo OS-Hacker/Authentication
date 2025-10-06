@@ -1,11 +1,11 @@
 const jwt = require("jsonwebtoken");
-const crypto = require("crypto");
 const TokenModel = require("../models/Token.model");
 const verifyAccountTemplate = require("../templates/verifyAccountTemplate");
 const sendEmail = require("./SendEmail");
 
 // Generate access token
 const generateAccessToken = (user) => {
+  console.log("userid", user.id);
   return jwt.sign(
     { id: user.id, email: user.email },
     process.env.ACCESS_TOKEN_SECRET,
@@ -71,7 +71,7 @@ const storeEmailToken = async (userId, emailToken) => {
 const sendVerificationEmail = async (emailToken, email) => {
   try {
     // Create verification URL
-    const verificationUrl = `${process.env.FRONTEND_BASE_URL}/verify-email?token=${emailToken}`;
+    const verificationUrl = `${process.env.FRONTEND_BASE_URL}/verify-email/${emailToken}`;
 
     // Send verification email
     await sendEmail({

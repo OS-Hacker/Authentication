@@ -6,9 +6,10 @@ import React, {
   useEffect,
   useState,
   useMemo,
+  useRef,
 } from "react";
 import Loading from "../pages/Loading";
-import { authAPI } from "../services/Api";
+import api from "../services/Api";
 
 const AuthContext = createContext();
 
@@ -19,7 +20,7 @@ const AuthProvider = ({ children }) => {
   // ✅ useCallback ensures stable reference
   const checkAuth = useCallback(async () => {
     try {
-      const data = await authAPI.getCurrentUser();
+      const { data } = await api.get(`/auth/me`);
       if (data?.success && data.user) {
         setAuth(data.user);
       } else {
@@ -34,10 +35,15 @@ const AuthProvider = ({ children }) => {
   }, []);
 
   // ✅ run only once on mount
+  // React StrictMode in development intentionally mounts/unmounts components
+  // twice which can cause side-effects (like network requests) to run twice.
+  // Use a ref guard so checkAuth only runs once per app load.
+  const hasCheckedRef = useRef(false);
   useEffect(() => {
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
     checkAuth();
   }, [checkAuth]);
-
   // ✅ useMemo prevents unnecessary context re-creation
   const value = useMemo(
     () => ({
