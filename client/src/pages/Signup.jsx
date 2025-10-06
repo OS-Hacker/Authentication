@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import axios from "axios";
+import { publicApi } from "../services/Api";
 
 // The Standard Flow: Registration -> Verification -> Login -> Tokens
 const Signup = () => {
@@ -56,10 +56,7 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      const { data } = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/auth/signup`,
-        formData
-      );
+      const { data } = await publicApi.post(`/auth/signup`, formData);
 
       if (data?.success) {
         toast.success(data.message);

@@ -60,7 +60,10 @@ const verifyRefreshToken = async (req, res, next) => {
       return next(new ErrorHandler("Refresh token required", 400));
     }
 
-    const storedToken = await TokenModel.findOne({ token });
+    const storedToken = await TokenModel.findOne({
+      token,
+      type: "refresh-token",
+    });
     if (!storedToken) {
       res.clearCookie("refreshToken");
       res.clearCookie("accessToken");

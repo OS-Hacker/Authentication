@@ -9,7 +9,7 @@ import React, {
   useRef,
 } from "react";
 import Loading from "../pages/Loading";
-import api from "../services/Api";
+import { api } from "../services/Api";
 
 const AuthContext = createContext();
 
@@ -34,10 +34,6 @@ const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // ✅ run only once on mount
-  // React StrictMode in development intentionally mounts/unmounts components
-  // twice which can cause side-effects (like network requests) to run twice.
-  // Use a ref guard so checkAuth only runs once per app load.
   const hasCheckedRef = useRef(false);
   useEffect(() => {
     if (hasCheckedRef.current) return;

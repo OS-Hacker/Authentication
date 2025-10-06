@@ -89,6 +89,7 @@ const verifyEmailController = async (req, res, next) => {
   try {
     const { token } = req.params;
 
+    // Validate token presence
     if (!token) {
       return next(new ErrorHandler("Verification token is required", 400));
     }
@@ -100,8 +101,6 @@ const verifyEmailController = async (req, res, next) => {
       return next(new ErrorHandler("Invalid or expired token", 400));
     }
 
-    console.log("decoded - ", decoded);
-
     // Find token in database
     const tokenRecord = await TokenModel.findOne({
       userId: decoded?.userId,
@@ -110,16 +109,12 @@ const verifyEmailController = async (req, res, next) => {
       expiresAt: { $gt: new Date() },
     });
 
-    console.log("tokenRecord - ", tokenRecord);
-
     if (!tokenRecord) {
       return next(new ErrorHandler("Invalid or expired token", 400));
     }
 
     // Find user and update emailVerified status
     const user = await userModel.findById(decoded.userId);
-
-    console.log("user - ", user);
 
     if (!user) {
       return next(new ErrorHandler("User not found", 404));
@@ -136,7 +131,7 @@ const verifyEmailController = async (req, res, next) => {
     await user.save();
 
     // Remove used token
-    // await TokenModel.findByIdAndDelete(tokenRecord?._id);
+    await TokenModel.findByIdAndDelete(tokenRecord?._id);
 
     return res.status(200).json({
       success: true,

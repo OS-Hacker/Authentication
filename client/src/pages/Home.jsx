@@ -2,7 +2,7 @@ import React, { useCallback } from "react";
 import { useAuth } from "../context/AuthProvider";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
-import api from "../services/Api";
+import { api } from "../services/Api";
 
 const Home = () => {
   const { auth, setAuth } = useAuth();
