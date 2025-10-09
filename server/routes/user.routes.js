@@ -9,21 +9,15 @@ const {
   logoutController,
 } = require("../controllers/user.controller");
 const { body } = require("express-validator");
-const { authenticate, verifyRefreshToken } = require("../middleware/verifyToken");
+const {
+  authenticate,
+  verifyRefreshToken,
+} = require("../middleware/verifyToken");
+const authValidation = require("../middleware/Validation");
 const userRouter = express.Router();
 
 // User registration
-userRouter.post(
-  "/signup",
-  [
-    body("userName").notEmpty().withMessage("Username is required"),
-    body("email").isEmail().withMessage("Valid email is required"),
-    body("password")
-      .isLength({ min: 8 })
-      .withMessage("Password must be at least 8 characters"),
-  ],
-  signupController
-);
+userRouter.post("/signup", authValidation.register, signupController);
 
 // User login
 userRouter.post(

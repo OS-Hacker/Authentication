@@ -24,7 +24,7 @@ const Signup = () => {
     }
   };
 
-  const validate = () => {
+  const validation = () => {
     const newErrors = {};
 
     if (!formData.userName.trim()) {
@@ -51,7 +51,7 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validation()) return;
 
     setIsLoading(true);
 
