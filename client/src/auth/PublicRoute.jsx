@@ -1,7 +1,7 @@
 // components/PublicRoute.jsx
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthProvider";
-import Loading from "../../pages/Loading";
+import { useAuth } from "../context/AuthProvider";
+import Loading from "../pages/Loading";
 
 const PublicRoute = ({ children, restricted = false }) => {
   const { isAuthenticated, isLoading } = useAuth();

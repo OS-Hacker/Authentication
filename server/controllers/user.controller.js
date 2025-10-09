@@ -2,7 +2,6 @@ const userModel = require("../models/user.model");
 const { validationResult } = require("express-validator");
 const JWT = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
 const sendEmail = require("../utils/SendEmail");
 const forgotPasswordTemplate = require("../templates/ForgotPasswordTemplate");
 const { ErrorHandler } = require("../utils/ErrorHandler");
@@ -213,6 +212,7 @@ const loginController = async (req, res, next) => {
       id: user._id,
       userName: user.userName,
       email: user.email,
+      role: user.role,
       createdAt: user.createdAt,
       lastLogin: user.lastLogin,
     };
@@ -448,6 +448,11 @@ const getMeController = async (req, res, next) => {
   }
 };
 
+/**
+ * @desc    Delete logout
+ * @route   Delete /api/v1/auth/logout
+ * @access  Private
+ */
 // logout controller
 const logoutController = async (req, res, next) => {
   try {

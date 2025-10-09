@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { CheckCircle, XCircle, Loader2, MailCheck } from "lucide-react";
-import { publicApi } from "../../services/Api";
+import { publicApi } from "../services/Api";
 
 const VerifyAccount = () => {
   const { token } = useParams();
@@ -12,25 +12,24 @@ const VerifyAccount = () => {
   const [countdown, setCountdown] = useState(5); // seconds
 
   // Email verification request effect
-useEffect(() => {
-  const verify = async () => {
-    if (!token) return;
+  useEffect(() => {
+    const verify = async () => {
+      if (!token) return;
 
-    try {
-      const { data } = await publicApi.get(`auth/verify-email/${token}`);
-      setStatus("success");
-      setMessage(data.message);
-    } catch (err) {
-      setStatus("error");
-      setMessage(
-        err.response?.data?.message || "Verification failed or link expired."
-      );
-    }
-  };
+      try {
+        const { data } = await publicApi.get(`auth/verify-email/${token}`);
+        setStatus("success");
+        setMessage(data.message);
+      } catch (err) {
+        setStatus("error");
+        setMessage(
+          err.response?.data?.message || "Verification failed or link expired."
+        );
+      }
+    };
 
-  verify();
-}, [token]);
-
+    verify();
+  }, [token]);
 
   // Countdown timer for success redirect
   useEffect(() => {

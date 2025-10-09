@@ -1,11 +1,13 @@
 // components/ProtectedRoute.jsx
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../../context/AuthProvider";
-import Loading from "../../pages/Loading";
+import { useAuth } from "../context/AuthProvider";
+import Loading from "../pages/Loading";
 
 const ProtectedRoute = ({ children, requiredRoles = [] }) => {
   const { isAuthenticated, auth, isLoading } = useAuth();
   const location = useLocation();
+
+  console.log(auth?.role);
 
   if (isLoading) {
     return <Loading />;

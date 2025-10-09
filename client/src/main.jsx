@@ -8,3 +8,6 @@ createRoot(document.getElementById("root")).render(
   <App />
   // </StrictMode>,
 );
+
+
+//  shadcn  - create jsconfig.json file in src

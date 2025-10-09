@@ -49,10 +49,7 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      const { data } = await api.post(
-        `${import.meta.env.VITE_API_BASE_URL}/auth/login`,
-        formData
-      );
+      const { data } = await api.post(`/auth/login`, formData);
 
       if (data?.success) {
         setAuth(data?.user); // Update auth context

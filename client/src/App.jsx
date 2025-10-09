@@ -6,26 +6,37 @@ import {
   Navigate,
 } from "react-router-dom";
 
-import ProtectedRoute from "./components/auth/ProtectedRoute";
-import PublicRoute from "./components/auth/PublicRoute";
+import ProtectedRoute from "./auth/ProtectedRoute";
+import PublicRoute from "./auth/PublicRoute";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Home from "./pages/Home";
-import ResetPassword from "./components/auth/ResetPassword";
+import ResetPassword from "./auth/ResetPassword";
 import AuthProvider from "./context/AuthProvider";
-import ForgotPassword from "./components/auth/ForgotPassword";
-import VerifyAccount from "./components/auth/VerifyAccount";
-import CheckEmailTem from "./components/auth/CheckEmailTem";
+import ForgotPassword from "./auth/ForgotPassword";
+import VerifyAccount from "./auth/VerifyAccount";
+import CheckEmailTem from "./auth/CheckEmailTem";
 import { Toaster } from "react-hot-toast";
 import ErrorPage from "./pages/ErrorPage";
 import Dashboard from "./pages/dashboard/Dashboard";
 import Unauthorized from "./pages/Unauthorized";
+import Layout from "./components/Layout";
 
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/home" replace />,
+    element: <Layout />,
+    children: [
+      {
+        path: "/home",
+        element: (
+          <ProtectedRoute>
+            <Home />
+          </ProtectedRoute>
+        ),
+      },
+    ],
     errorElement: <ErrorPage />,
   },
   {
@@ -77,17 +88,9 @@ const router = createBrowserRouter([
     ),
   },
   {
-    path: "/home",
-    element: (
-      <ProtectedRoute>
-        <Home />
-      </ProtectedRoute>
-    ),
-  },
-  {
     path: "/dashboard",
     element: (
-      <ProtectedRoute requiredRoles={["admin", "user"]}>
+      <ProtectedRoute requiredRoles={["admin"]}>
         {/* Example role protection */}
         <Dashboard />
       </ProtectedRoute>
