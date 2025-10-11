@@ -118,3 +118,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Prevent any unwanted horizontal scroll */
+html,
+body {
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+}
+
+/* Optional – make scrollbar minimal */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #c4c4c4;
+  border-radius: 8px;
+}

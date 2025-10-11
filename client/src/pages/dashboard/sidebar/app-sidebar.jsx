@@ -47,7 +47,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-xl flex justify-center items-center">
-            Application
+            ALPHA
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
