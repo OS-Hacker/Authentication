@@ -4,6 +4,7 @@ const cors = require("cors");
 const userRouter = require("./routes/user.routes");
 const { globalErrorHandler } = require("./middleware/globalErrorHandler");
 const cookieParser = require("cookie-parser");
+const productRouter = require("./routes/product.routes");
 require("dotenv").config();
 
 const app = express();
@@ -28,6 +29,7 @@ connectDB();
 
 // routes
 app.use("/api/v1/auth", userRouter);
+app.use("/api/v1/", productRouter);
 
 // global error handler
 app.use(globalErrorHandler);

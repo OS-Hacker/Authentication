@@ -20,18 +20,13 @@ const items = [
     icon: Home,
   },
   {
-    title: "Inbox",
-    url: "#",
+    title: "Create-Product",
+    url: "/dashboard/create-product",
     icon: Inbox,
   },
   {
-    title: "Calendar",
-    url: "#",
-    icon: Calendar,
-  },
-  {
-    title: "Search",
-    url: "#",
+    title: "All-Products",
+    url: "/dashboard/all-products",
     icon: Search,
   },
   {

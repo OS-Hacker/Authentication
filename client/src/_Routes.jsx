@@ -18,6 +18,8 @@ import ProtectedRoute from "./Protect/ProtectedRoute";
 import PublicRoute from "./Protect/PublicRoute";
 import Users from "./components/Users";
 import Settings from "./components/Settings";
+import CreateProduct from "./pages/dashboard/CreateProduct";
+import ProductList from "./pages/dashboard/ProductList";
 
 export const router = createBrowserRouter([
   {
@@ -98,6 +100,14 @@ export const router = createBrowserRouter([
       {
         path: "users",
         element: <Users />,
+      },
+      {
+        path: "create-product",
+        element: <CreateProduct />,
+      },
+      {
+        path: "all-products",
+        element: <ProductList />,
       },
       {
         path: "settings",

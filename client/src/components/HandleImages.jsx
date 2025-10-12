@@ -1,19 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-const HandleImages = ({ setValue, trigger ,errors}) => {
-  // Constants for image validation
-  const IMAGE_CONFIG = {
-    MAX_COUNT: 5,
-    MAX_SIZE: 2 * 1024 * 1024, // 2MB in bytes
-  };
+// Constants for image validation
+const IMAGE_CONFIG = {
+  MAX_COUNT: 5,
+  MAX_SIZE: 2 * 1024 * 1024, // 2MB in bytes
+};
+const HandleImages = ({ setValue, trigger, errors }) => {
   // State for image preview URLs
   const [previewImages, setPreviewImages] = useState([]);
   const fileInputRef = useRef(null);
-  /**
-   * Validates file constraints before processing
-   * @param {FileList} files - Files to validate
-   * @returns {boolean} - True if validation passes
-   */
+
   const validateFiles = useCallback(
     (files) => {
       const fileArray = Array.from(files);

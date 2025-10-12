@@ -13,7 +13,7 @@ const {
   authenticate,
   verifyRefreshToken,
 } = require("../middleware/verifyToken");
-const authValidation = require("../middleware/Validation");
+const authValidation = require("../middleware/validation");
 const userRouter = express.Router();
 
 // User registration

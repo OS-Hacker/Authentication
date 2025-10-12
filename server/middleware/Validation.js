@@ -108,4 +108,7 @@ const authValidation = {
   ],
 };
 
-module.exports = authValidation;
+module.exports = {
+  ...authValidation,
+  handleValidationErrors,
+};

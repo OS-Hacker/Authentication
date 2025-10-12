@@ -3,6 +3,7 @@ import { Menu, X } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import { DropdownMenuRadioGroupDemo } from "./DropdownMenu";
+import { ToggleTheme } from "./ToggleTheme";
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -46,6 +47,9 @@ const Navbar = () => {
 
             {/* Custom Dropdown */}
             <DropdownMenuRadioGroupDemo />
+
+            {/* Theme */}
+            <ToggleTheme />
           </div>
 
           {/* Mobile Menu Button */}
