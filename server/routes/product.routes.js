@@ -14,7 +14,7 @@ productRouter.post(
 );
 
 // Get all products
-productRouter.get("/", productController.getProducts);
+productRouter.get("/products", productController.getProducts);
 
 // Get single product
 productRouter.get("/:id", productController.getProduct);

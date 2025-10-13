@@ -3,35 +3,49 @@ import {
   RouterProvider,
   Navigate,
 } from "react-router-dom";
+
+// Layout Components
+import Layout from "./components/Layout";
+import SideBarLayout from "./pages/dashboard/sidebar/SideBarLayout";
+
+// Auth Components
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
-import Home from "./pages/Home";
 import ResetPassword from "./auth/ResetPassword";
 import ForgotPassword from "./auth/ForgotPassword";
 import VerifyAccount from "./auth/VerifyAccount";
 import CheckEmailTem from "./auth/CheckEmailTem";
+
+// Page Components
+import Home from "./pages/Home";
 import ErrorPage from "./pages/ErrorPage";
-import SideBarLayout from "./pages/dashboard/sidebar/SideBarLayout";
 import Unauthorized from "./pages/Unauthorized";
-import Layout from "./components/Layout";
-import ProtectedRoute from "./Protect/ProtectedRoute";
-import PublicRoute from "./Protect/PublicRoute";
+
+// Dashboard Components
+import Dashboard from "./pages/dashboard/Dashboard";
 import Users from "./components/Users";
 import Settings from "./components/Settings";
 import CreateProduct from "./pages/dashboard/CreateProduct";
 import ProductList from "./pages/dashboard/ProductList";
 
-export const router = createBrowserRouter([
+// Route Protection
+import ProtectedRoute from "./Protect/ProtectedRoute";
+import PublicRoute from "./Protect/PublicRoute";
+
+// Route configuration
+const routes = [
+  // Public routes with layout
   {
     path: "/",
     element: <Layout />,
+    errorElement: <ErrorPage />,
     children: [
       {
         index: true,
-        element: <Navigate to="Home" replace />,
+        element: <Navigate to="/home" replace />,
       },
       {
-        path: "Home",
+        path: "home",
         element: (
           <ProtectedRoute>
             <Home />
@@ -39,56 +53,71 @@ export const router = createBrowserRouter([
         ),
       },
     ],
-    errorElement: <ErrorPage />,
   },
+
+  // Auth routes (public only)
   {
-    path: "/login",
-    element: (
-      <PublicRoute restricted>
-        <Login />
-      </PublicRoute>
-    ),
+    path: "/auth",
+    children: [
+      {
+        path: "login",
+        element: (
+          <PublicRoute restricted>
+            <Login />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: "signup",
+        element: (
+          <PublicRoute restricted>
+            <Signup />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: "forgot-password",
+        element: (
+          <PublicRoute restricted>
+            <ForgotPassword />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: "reset-password/:token",
+        element: (
+          <PublicRoute restricted>
+            <ResetPassword />
+          </PublicRoute>
+        ),
+      },
+    ],
   },
+
+  // Email verification routes
   {
-    path: "/signup",
-    element: (
-      <PublicRoute restricted>
-        <Signup />
-      </PublicRoute>
-    ),
+    path: "/verify",
+    children: [
+      {
+        path: "email/:token",
+        element: (
+          <PublicRoute restricted>
+            <VerifyAccount />
+          </PublicRoute>
+        ),
+      },
+      {
+        path: "check-email",
+        element: (
+          <PublicRoute restricted>
+            <CheckEmailTem />
+          </PublicRoute>
+        ),
+      },
+    ],
   },
-  {
-    path: "/verify-email/:token",
-    element: (
-      <PublicRoute restricted>
-        <VerifyAccount />
-      </PublicRoute>
-    ),
-  },
-  {
-    path: "/forgot-password",
-    element: (
-      <PublicRoute restricted>
-        <ForgotPassword />
-      </PublicRoute>
-    ),
-  },
-  {
-    path: "/check-email",
-    element: (
-      <PublicRoute restricted>
-        <CheckEmailTem />
-      </PublicRoute>
-    ),
-  },
-  {
-    path: "/reset-password/:token",
-    element: (
-      <PublicRoute restricted>
-        <ResetPassword />
-      </PublicRoute>
-    ),
-  },
+
+  // Admin Dashboard routes
   {
     path: "/dashboard",
     element: (
@@ -98,16 +127,37 @@ export const router = createBrowserRouter([
     ),
     children: [
       {
+        index: true,
+        element: <Navigate to="/dashboard/overview" replace />,
+      },
+      {
+        path: "overview",
+        element: <Dashboard />,
+      },
+      {
         path: "users",
         element: <Users />,
       },
       {
-        path: "create-product",
-        element: <CreateProduct />,
-      },
-      {
-        path: "all-products",
-        element: <ProductList />,
+        path: "products",
+        children: [
+          {
+            index: true,
+            element: <Navigate to="/dashboard/products/all" replace />,
+          },
+          {
+            path: "all",
+            element: <ProductList />,
+          },
+          {
+            path: "create",
+            element: <CreateProduct />,
+          },
+          {
+            path: "edit/:id",
+            element: <CreateProduct />, // You might want to create an EditProduct component
+          },
+        ],
       },
       {
         path: "settings",
@@ -115,12 +165,18 @@ export const router = createBrowserRouter([
       },
     ],
   },
+
+  // Utility routes
   {
     path: "/unauthorized",
     element: <Unauthorized />,
   },
+
+  // Catch all route - 404
   {
     path: "*",
     element: <ErrorPage />,
   },
-]);
+];
+
+export const router = createBrowserRouter(routes);

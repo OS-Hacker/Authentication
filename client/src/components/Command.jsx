@@ -54,7 +54,7 @@ function CommandDemo({ setValue, selectedValue, setSelectedValue }) {
 
       <Command className="rounded-lg border shadow-md">
         <CommandInput
-          placeholder="Search categories..."
+          placeholder="Search SearchAndSelect..."
           value={searchQuery}
           onValueChange={handleSearch}
         />

@@ -1,11 +1,27 @@
-// components/CreateProduct.jsx
-import React, { useCallback, useState, useMemo } from "react";
+import React, { useCallback, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { productSchema } from "@/components/ZodValidation";
 import { api } from "@/services/Api";
 import HandleImages from "@/components/HandleImages";
 import CommandDemo from "@/components/Command";
+import toast from "react-hot-toast";
+
+// Shadcn/ui components
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
+import { productSchema } from "@/components/ZodValidation";
 
 const CATEGORY_OPTIONS = [
   "Electronics",
@@ -19,7 +35,6 @@ const CATEGORY_OPTIONS = [
 const CreateProduct = () => {
   const [selectedValue, setSelectedValue] = useState("");
   const [saving, setSaving] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
 
   // Form configuration
   const {
@@ -30,8 +45,6 @@ const CreateProduct = () => {
     watch,
     trigger,
     reset,
-    setError,
-    clearErrors,
   } = useForm({
     resolver: zodResolver(productSchema),
     defaultValues: {
@@ -42,364 +55,491 @@ const CreateProduct = () => {
       categories: [],
       inStock: false,
       images: [],
+      SearchAndSelect: [],
     },
     mode: "onChange",
   });
 
+  // Watch form state
   const selectedCategories = watch("categories");
+  const inStockValue = watch("inStock");
+  const stockQuantity = watch("stock");
 
-  // Memoized values
-  const formTitle = useMemo(
-    () => (editingProduct ? "Edit Product" : "Add New Product"),
-    [editingProduct]
-  );
-
-  const submitButtonText = useMemo(
-    () =>
-      saving
-        ? "Saving..."
-        : editingProduct
-        ? "Update Product"
-        : "Create Product",
-    [saving, editingProduct]
-  );
+  // reset images
+  const [resetImages, setResetImages] = useState(false); // ✅ new
 
   // Category handlers
   const handleCategoryChange = useCallback(
     (category) => {
-      const updatedCategories = selectedCategories.includes(category)
+      const updatedCategories = selectedCategories?.includes(category)
         ? selectedCategories.filter((c) => c !== category)
-        : [...selectedCategories, category];
+        : [...(selectedCategories || []), category];
 
       setValue("categories", updatedCategories, { shouldValidate: true });
     },
     [selectedCategories, setValue]
   );
 
+  // handle Search / CommandDemo
   const handleCommandSelect = useCallback(
     (category) => {
       setSelectedValue(category);
 
       // Also add to categories if not already present
-      setValue(
-        "categories",
-        (prev) => {
-          if (!prev.includes(category)) {
-            return [...prev, category];
-          }
-          return prev;
-        },
-        { shouldValidate: true }
-      );
+      if (!selectedCategories?.includes(category)) {
+        const updatedCategories = [...(selectedCategories || []), category];
+        setValue("categories", updatedCategories, { shouldValidate: true });
+      }
     },
-    [setValue]
+    [selectedCategories, setValue]
   );
 
-  // Cancel edit handler
-  const handleCancelEdit = useCallback(() => {
-    if (
-      isDirty &&
-      !window.confirm(
-        "You have unsaved changes. Are you sure you want to cancel?"
-      )
-    ) {
-      return;
-    }
-    reset();
-    setEditingProduct(null);
-    setSelectedValue("");
-    clearErrors();
-  }, [reset, isDirty, clearErrors]);
+  // Remove category
+  const removeCategory = useCallback(
+    (categoryToRemove) => {
+      const updatedCategories = (selectedCategories || []).filter(
+        (category) => category !== categoryToRemove
+      );
+      setValue("categories", updatedCategories, { shouldValidate: true });
+    },
+    [selectedCategories, setValue]
+  );
+
+  // Handle stock quantity change
+  const handleStockChange = useCallback(
+    (e) => {
+      const value = e.target.value;
+      setValue("stock", value, { shouldValidate: true });
+
+      // Auto-update inStock based on stock quantity
+      const stockNum = parseInt(value) || 0;
+      if (stockNum > 0 && !inStockValue) {
+        setValue("inStock", true, { shouldValidate: true });
+      } else if (stockNum === 0 && inStockValue) {
+        setValue("inStock", false, { shouldValidate: true });
+      }
+    },
+    [inStockValue, setValue]
+  );
+
+  // Handle inStock toggle
+  const handleInStockToggle = useCallback(
+    (checked) => {
+      setValue("inStock", checked, { shouldValidate: true });
+
+      // If setting to inStock but stock is 0, set stock to 1
+      if (checked && (!stockQuantity || parseInt(stockQuantity) === 0)) {
+        setValue("stock", "1", { shouldValidate: true });
+      }
+    },
+    [stockQuantity, setValue]
+  );
 
   // Form submission with proper error handling
   const onSubmit = useCallback(
     async (data) => {
       setSaving(true);
+
+      const formData = new FormData();
+
+      // Append basic fields with validation
+      formData.append("productName", data.productName.trim());
+      formData.append("price", parseFloat(data.price).toFixed(2));
+      formData.append("description", (data.description || "").trim());
+      formData.append("stock", parseInt(data.stock) || 0);
+      formData.append("inStock", Boolean(data.inStock));
+
+      if (selectedValue) {
+        formData.append("SearchAndSelect", selectedValue);
+      }
+
+      // Append categories
+      (data.categories || []).forEach((category) =>
+        formData.append("categories", category)
+      );
+
+      // Append images with validation
+      if (data.images && data.images.length > 0) {
+        data.images.forEach((file) => {
+          if (file instanceof File) {
+            formData.append("images", file);
+          }
+        });
+      }
+
       try {
-        const formData = new FormData();
-
-        // Append basic fields with validation
-        formData.append("productName", data.productName.trim());
-        formData.append("price", parseFloat(data.price).toFixed(2));
-        formData.append("description", (data.description || "").trim());
-        formData.append("stock", parseInt(data.stock));
-        formData.append("inStock", Boolean(data.inStock));
-
-        if (selectedValue) {
-          formData.append("selectedValue", selectedValue);
-        }
-
-        // Append categories
-        (data.categories || []).forEach((category) =>
-          formData.append("categories", category)
-        );
-
-        // Append images with validation
-        if (data.images && data.images.length > 0) {
-          data.images.forEach((file) => {
-            if (file instanceof File) {
-              formData.append("images", file);
-            }
-          });
-        }
-
-        let response;
-        const config = {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-          timeout: 30000, // 30 second timeout
-        };
-
-        if (editingProduct) {
-          response = await api.put(
-            `/products/${editingProduct._id}`,
-            formData,
-            config
-          );
-        } else {
-          response = await api.post("/products", formData, config);
-        }
+        const response = await api.post("/create-product", formData);
 
         if (response?.data?.success) {
           // Success handling
+          toast.success("Product created successfully!");
           reset();
           setSelectedValue("");
-          setEditingProduct(null);
-
-          // Show success message (replace with toast in production)
-          console.log(
-            editingProduct
-              ? "Product updated successfully!"
-              : "Product created successfully!"
-          );
+          setResetImages((prev) => !prev); // ✅ trigger image reset
         } else {
           throw new Error(response?.data?.message || "Save operation failed");
         }
       } catch (error) {
         console.error("Save error:", error);
-
-        // Enhanced error handling
-        const errorMessage =
-          error.response?.data?.message ||
-          error.message ||
-          "Failed to save product. Please try again.";
-
-        // Set form errors if available from backend
-        if (error.response?.data?.errors) {
-          error.response.data.errors.forEach((err) => {
-            setError(err.path, { type: "server", message: err.message });
-          });
-        } else {
-          // Set generic error
-          setError("root", { type: "server", message: errorMessage });
-        }
+        toast.error(
+          error.response?.data?.message || "Failed to create product"
+        );
       } finally {
         setSaving(false);
       }
     },
-    [selectedValue, editingProduct, reset, setError]
+    [selectedValue, reset]
   );
 
+  // Calculate stock status
+  const stockStatus = stockQuantity ? parseInt(stockQuantity) : 0;
+  const isOutOfStock = stockStatus === 0;
+  const isLowStock = stockStatus > 0 && stockStatus <= 10;
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Product Form */}
-        <div className="lg:col-span-1">
-          <form
-            onSubmit={handleSubmit(onSubmit)}
-            className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-6 sticky top-6"
-            noValidate
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-gray-900">{formTitle}</h2>
-              {editingProduct && (
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors"
-                >
-                  Cancel Edit
-                </button>
-              )}
-            </div>
+    <div className="min-h-screenpy-4 sm:py-6 lg:py-8">
+      <div className="container w-full px-4 sm:px-6 lg:px-8">
+        <Card className="shadow-lg border-border max-w-3xl mx-auto">
+          <CardHeader className="pb-6 text-center sm:text-left">
+            <CardTitle className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
+              Create New Product
+            </CardTitle>
+            <CardDescription className="text-base sm:text-lg mt-2">
+              Add a new product to your inventory. All fields marked with * are
+              required.
+            </CardDescription>
+          </CardHeader>
 
-            {/* Root Error Display */}
-            {errors.root && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-600 text-sm">{errors.root.message}</p>
-              </div>
-            )}
+          <CardContent className="space-y-6 sm:space-y-8">
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="space-y-6 sm:space-y-8"
+            >
+              {/* Product Name & Price - Side by side on larger screens */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                {/* Product Name */}
+                <div className="space-y-2">
+                  <Label htmlFor="productName" className="text-sm font-medium">
+                    Product Name *
+                  </Label>
+                  <Input
+                    {...register("productName")}
+                    id="productName"
+                    type="text"
+                    placeholder="Enter product name"
+                    disabled={saving}
+                    className={
+                      errors.productName
+                        ? "border-destructive focus:ring-destructive"
+                        : ""
+                    }
+                  />
+                  {errors.productName && (
+                    <p className="text-destructive text-sm font-medium">
+                      {errors.productName.message}
+                    </p>
+                  )}
+                </div>
 
-            {/* Product Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Product Name *
-              </label>
-              <input
-                {...register("productName")}
-                type="text"
-                placeholder="Enter product name"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:bg-gray-100 disabled:cursor-not-allowed"
-                disabled={saving}
-              />
-              {errors.productName && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.productName.message}
-                </p>
-              )}
-            </div>
-
-            {/* Price */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Price (₹) *
-              </label>
-              <input
-                {...register("price", {
-                  valueAsNumber: true,
-                  min: { value: 0, message: "Price must be positive" },
-                })}
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0.00"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:bg-gray-100 disabled:cursor-not-allowed"
-                disabled={saving}
-              />
-              {errors.price && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.price.message}
-                </p>
-              )}
-            </div>
-
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                {...register("description")}
-                rows="4"
-                placeholder="Enter product description..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-                disabled={saving}
-              />
-              {errors.description && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.description.message}
-                </p>
-              )}
-            </div>
-
-            {/* Stock Quantity */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Stock Quantity *
-              </label>
-              <input
-                {...register("stock", {
-                  valueAsNumber: true,
-                  min: { value: 0, message: "Stock cannot be negative" },
-                })}
-                type="number"
-                min="0"
-                placeholder="0"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition disabled:bg-gray-100 disabled:cursor-not-allowed"
-                disabled={saving}
-              />
-              {errors.stock && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.stock.message}
-                </p>
-              )}
-            </div>
-
-            {/* Categories Checkboxes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Categories
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {CATEGORY_OPTIONS.map((category) => (
-                  <label
-                    key={category}
-                    className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCategories.includes(category)}
-                      onChange={() => handleCategoryChange(category)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                {/* Price */}
+                <div className="space-y-2">
+                  <Label htmlFor="price" className="text-sm font-medium">
+                    Price (₹) *
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">
+                      ₹
+                    </span>
+                    <Input
+                      {...register("price", {
+                        valueAsNumber: true,
+                        min: { value: 0, message: "Price must be positive" },
+                      })}
+                      id="price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
                       disabled={saving}
+                      className={`pl-8 ${
+                        errors.price
+                          ? "border-destructive focus:ring-destructive"
+                          : ""
+                      }`}
                     />
-                    <span className="text-sm text-gray-700">{category}</span>
-                  </label>
-                ))}
+                  </div>
+                  {errors.price && (
+                    <p className="text-destructive text-sm font-medium">
+                      {errors.price.message}
+                    </p>
+                  )}
+                </div>
               </div>
-              {errors.categories && (
-                <p className="text-red-600 text-sm mt-1">
-                  {errors.categories.message}
+
+              {/* Description */}
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-sm font-medium">
+                  Description
+                </Label>
+                <Textarea
+                  {...register("description")}
+                  id="description"
+                  rows="4"
+                  placeholder="Enter product description..."
+                  disabled={saving}
+                  className={
+                    errors.description
+                      ? "border-destructive focus:ring-destructive"
+                      : ""
+                  }
+                />
+                {errors.description && (
+                  <p className="text-destructive text-sm font-medium">
+                    {errors.description.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Stock Quantity & In Stock Toggle - Side by side on larger screens */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                {/* Stock Quantity */}
+                <div className="space-y-2">
+                  <Label htmlFor="stock" className="text-sm font-medium">
+                    Stock Quantity *
+                  </Label>
+                  <Input
+                    {...register("stock", {
+                      valueAsNumber: true,
+                      min: { value: 0, message: "Stock cannot be negative" },
+                    })}
+                    id="stock"
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    disabled={saving}
+                    onChange={handleStockChange}
+                    className={
+                      errors.stock
+                        ? "border-destructive focus:ring-destructive"
+                        : ""
+                    }
+                  />
+                  {errors.stock && (
+                    <p className="text-destructive text-sm font-medium">
+                      {errors.stock.message}
+                    </p>
+                  )}
+
+                  {/* Stock Status Indicator */}
+                  {stockQuantity !== undefined && stockQuantity !== "" && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          isOutOfStock
+                            ? "bg-destructive"
+                            : isLowStock
+                            ? "bg-amber-500"
+                            : "bg-green-500"
+                        }`}
+                      />
+                      <span
+                        className={`text-xs font-medium ${
+                          isOutOfStock
+                            ? "text-destructive"
+                            : isLowStock
+                            ? "text-amber-600"
+                            : "text-green-600"
+                        }`}
+                      >
+                        {isOutOfStock
+                          ? "Out of stock"
+                          : isLowStock
+                          ? "Low stock"
+                          : "In stock"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* In Stock Toggle */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium block mb-2">
+                    Availability
+                  </Label>
+                  <div
+                    className={`flex items-center space-x-3 p-3 rounded-lg border transition-colors ${
+                      inStockValue
+                        ? "bg-green-50 border-green-200"
+                        : "bg-muted/50 border-border"
+                    }`}
+                  >
+                    <Checkbox
+                      id="inStock"
+                      checked={inStockValue}
+                      onCheckedChange={handleInStockToggle}
+                      disabled={saving}
+                      className={
+                        inStockValue
+                          ? "data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                          : ""
+                      }
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Label
+                        htmlFor="inStock"
+                        className="text-sm font-medium cursor-pointer block"
+                      >
+                        {inStockValue ? "In Stock" : "Out of Stock"}
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {inStockValue
+                          ? stockStatus > 10
+                            ? `${stockStatus} units available`
+                            : stockStatus > 0
+                            ? `Only ${stockStatus} units left`
+                            : "Product is available for purchase"
+                          : "Product is currently unavailable"}
+                      </p>
+                    </div>
+                    {inStockValue && (
+                      <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Categories Section */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <Label className="text-sm font-medium">Categories</Label>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedCategories?.length || 0} selected
+                  </span>
+                </div>
+
+                {/* Categories Checkboxes */}
+                <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 gap-3">
+                  {CATEGORY_OPTIONS.map((category) => (
+                    <div
+                      key={category}
+                      className={`flex items-center space-x-2 p-3 rounded-lg border transition-colors ${
+                        selectedCategories?.includes(category)
+                          ? "bg-primary/10 border-primary"
+                          : "bg-background border-border hover:bg-muted/50"
+                      }`}
+                    >
+                      <Checkbox
+                        id={`category-${category}`}
+                        checked={selectedCategories?.includes(category)}
+                        onCheckedChange={() => handleCategoryChange(category)}
+                        disabled={saving}
+                      />
+                      <Label
+                        htmlFor={`category-${category}`}
+                        className="text-sm font-normal cursor-pointer flex-1 truncate"
+                      >
+                        {category}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+
+                {errors.categories && (
+                  <p className="text-destructive text-sm font-medium">
+                    {errors.categories.message}
+                  </p>
+                )}
+
+                {/* Selected Categories Badges */}
+                {selectedCategories?.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-muted-foreground">
+                      Selected Categories:
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCategories.map((category) => (
+                        <Badge
+                          key={category}
+                          variant="secondary"
+                          className="px-3 py-1.5 text-sm flex items-center gap-1 group"
+                        >
+                          <span>{category}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeCategory(category)}
+                            className="ml-1 hover:text-destructive focus:outline-none transition-colors size-4 rounded-full flex items-center justify-center group-hover:bg-destructive/10"
+                            disabled={saving}
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Command Search */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Search Categories</Label>
+                <CommandDemo
+                  setValue={handleCommandSelect}
+                  selectedValue={selectedValue}
+                  setSelectedValue={setSelectedValue}
+                  disabled={saving}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Search and select additional categories
                 </p>
-              )}
-            </div>
-
-            {/* Command Search */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Categories
-              </label>
-              <CommandDemo
-                setValue={handleCommandSelect}
-                selectedValue={selectedValue}
-                setSelectedValue={setSelectedValue}
-                disabled={saving}
-              />
-            </div>
-
-            {/* In Stock Toggle */}
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <input
-                {...register("inStock")}
-                type="checkbox"
-                className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={saving}
-              />
-              <label className="text-sm font-medium text-gray-700 cursor-pointer select-none">
-                Available in Stock
-              </label>
-            </div>
-
-            {/* Image Upload */}
-            <HandleImages
-              setValue={setValue}
-              trigger={trigger}
-              errors={errors}
-              existingImages={editingProduct?.images || []}
-              disabled={saving}
-              isEditing={!!editingProduct}
-            />
-
-            {/* Form Actions */}
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={saving || (!isDirty && !editingProduct)}
-                className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-              >
-                {submitButtonText}
-              </button>
-            </div>
-
-            {/* Form Status */}
-            {editingProduct && (
-              <div className="text-xs text-gray-500 text-center">
-                Editing: {editingProduct.productName}
               </div>
-            )}
-          </form>
-        </div>
+
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <HandleImages
+                  setValue={setValue}
+                  resetTrigger={resetImages} // <-- new prop
+                  errors={errors}
+                  trigger={trigger}
+                  disabled={saving}
+                  showErrors={false}
+                />
+                {errors.images && (
+                  <p className="text-destructive text-sm font-medium">
+                    {errors.images.message}
+                  </p>
+                )}
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => reset()}
+                  disabled={saving || !isDirty}
+                  className="sm:flex-1 order-2 sm:order-1"
+                >
+                  Reset Form
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={saving || !isDirty}
+                  className="sm:flex-1 order-1 sm:order-2"
+                  size="lg"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Product...
+                    </>
+                  ) : (
+                    "Create Product"
+                  )}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

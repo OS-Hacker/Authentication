@@ -112,38 +112,76 @@ class ProductController {
    * @param {Object} req.query - Query parameters (page, limit)
    * @param {Object} res - Express response object
    */
-  async getProducts(req, res) {
+  // controllers/product.controller.js
+  async getProducts(req, res, next) {
     try {
-      // Parse pagination parameters with defaults
-      const page = parseInt(req.query.page, 10) || 1;
+      // 🧩 Parse query parameters safely with defaults
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
       const limit = Math.min(parseInt(req.query.limit, 10) || 10, 100);
-      const skip = (page - 1) * limit; // Calculate documents to skip
+      const skip = (page - 1) * limit;
 
-      // Fetch products with pagination and sorting
-      const query = {}; // add filtering later if needed
-      const products = await Product.find(query)
-        .skip(skip)
-        .limit(limit)
-        .sort({ createdAt: -1 });
-      const total = await Product.countDocuments(query);
+      // 🔍 Build dynamic filter conditions
+      const filter = {};
 
-      // Return success response with products and pagination info
-      res.json({
+      // Example: search by name or category
+      if (req.query.search) {
+        const searchRegex = new RegExp(req.query.search, "i");
+        filter.$or = [
+          { name: searchRegex },
+          { description: searchRegex },
+          { category: searchRegex },
+        ];
+      }
+
+      // Example: filter by category
+      if (req.query.category) {
+        filter.category = req.query.category;
+      }
+
+      // Example: price range filter
+      if (req.query.minPrice || req.query.maxPrice) {
+        filter.price = {};
+        if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
+        if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
+      }
+
+      // 🧭 Sorting (default: newest first)
+      const sortField = req.query.sortBy || "createdAt";
+      const sortOrder = req.query.order === "asc" ? 1 : -1;
+
+      // ⚡ Fetch paginated + sorted + filtered products
+      const [products, total] = await Promise.all([
+        Product.find(filter)
+          .sort({ [sortField]: sortOrder })
+          .skip(skip)
+          .limit(limit)
+          .lean(), // performance boost
+        Product.countDocuments(filter),
+      ]);
+
+      // 📦 Standard success response
+      return res.status(200).json({
         success: true,
+        message: "Products fetched successfully",
         data: products,
         pagination: {
-          page, // Current page
-          limit, // Items per page
-          total, // Total items in database
-          pages: Math.ceil(total / limit), // Total pages
+          totalItems: total,
+          totalPages: Math.ceil(total / limit),
+          currentPage: page,
+          itemsPerPage: limit,
+          hasNextPage: page * limit < total,
+          hasPrevPage: page > 1,
         },
       });
     } catch (error) {
-      // Return error response
-      res.status(500).json({
+      console.error("Error fetching products:", error);
+
+      // ⚠️ Consistent error structure
+      return res.status(500).json({
         success: false,
-        message: "Error fetching products",
-        error: error.message,
+        message: "Internal server error while fetching products",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
