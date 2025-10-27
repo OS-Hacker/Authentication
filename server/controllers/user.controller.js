@@ -23,9 +23,12 @@ const { storeRefreshToken } = require("../utils/GenerateTokens");
  */
 
 const signupController = async (req, res, next) => {
+  // validation
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
   try {
-    const { userName, email, password } = req.body;
-
     // Check if user already exists
     const existingUser = await userModel.findOne({ email });
     if (existingUser) {

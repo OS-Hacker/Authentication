@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { api } from "@/services/Api";
@@ -22,6 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { productSchema } from "@/components/ZodValidation";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 const CATEGORY_OPTIONS = [
   "Electronics",
@@ -35,6 +36,11 @@ const CATEGORY_OPTIONS = [
 const CreateProduct = () => {
   const [selectedValue, setSelectedValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+  const editingProduct = location.state?.product || null;
+  const editMode = Boolean(params?.id || editingProduct);
 
   // Form configuration
   const {
@@ -56,6 +62,7 @@ const CreateProduct = () => {
       inStock: false,
       images: [],
       SearchAndSelect: [],
+      removedImages: [],
     },
     mode: "onChange",
   });
@@ -67,6 +74,8 @@ const CreateProduct = () => {
 
   // reset images
   const [resetImages, setResetImages] = useState(false); // ✅ new
+  // initial images for edit mode
+  const [initialImages, setInitialImages] = useState([]);
 
   // Category handlers
   const handleCategoryChange = useCallback(
@@ -167,29 +176,80 @@ const CreateProduct = () => {
         });
       }
 
+      // Append removed remote image ids (for update operations)
+      if (data.removedImages && data.removedImages.length > 0) {
+        (data.removedImages || []).forEach((id) =>
+          formData.append("removedImages", id)
+        );
+      }
+
       try {
-        const response = await api.post("/create-product", formData);
+        let response;
+
+        if (editMode && (params?.id || editingProduct?._id)) {
+          const id = params?.id || editingProduct._id;
+          response = await api.put(`/${id}`, formData);
+        } else {
+          response = await api.post("/create-product", formData);
+        }
 
         if (response?.data?.success) {
-          // Success handling
-          toast.success("Product created successfully!");
+          const successMessage = editMode
+            ? "Product updated successfully!"
+            : "Product created successfully!";
+          toast.success(successMessage);
           reset();
           setSelectedValue("");
-          setResetImages((prev) => !prev); // ✅ trigger image reset
+          setResetImages((prev) => !prev); // trigger image reset
+
+          if (editMode) {
+            // navigate back to list after edit
+            navigate("/dashboard/products/all");
+          }
         } else {
           throw new Error(response?.data?.message || "Save operation failed");
         }
       } catch (error) {
         console.error("Save error:", error);
         toast.error(
-          error.response?.data?.message || "Failed to create product"
+          error.response?.data?.message ||
+            (editMode ? "Failed to update product" : "Failed to create product")
         );
       } finally {
         setSaving(false);
       }
     },
-    [selectedValue, reset]
+    [selectedValue, reset, editMode, params, editingProduct, navigate]
   );
+
+  // Prefill form in edit mode (if product passed in navigation state)
+  useEffect(() => {
+    if (editingProduct) {
+      const p = editingProduct;
+      setValue("productName", p.productName || "");
+      setValue("price", p.price || "");
+      setValue("description", p.description || "");
+      setValue("stock", p.stock || "0");
+      setValue("categories", p.categories || []);
+      setValue("inStock", !!p.inStock);
+      setSelectedValue(p.selectedCategory || p.selectedValue || "");
+
+      // Map existing images (remote) to initialImages structure used by HandleImages
+      if (Array.isArray(p.images) && p.images.length > 0) {
+        const imgs = p.images.map((img) => ({
+          id:
+            img.fileId ||
+            img.file_id ||
+            img.public_id ||
+            img._id ||
+            Math.random().toString(36).slice(2),
+          url: img.url || img.secure_url || img.thumbnail || img.filePath,
+          remote: true,
+        }));
+        setInitialImages(imgs);
+      }
+    }
+  }, [editingProduct, setValue]);
 
   // Calculate stock status
   const stockStatus = stockQuantity ? parseInt(stockQuantity) : 0;
@@ -502,6 +562,7 @@ const CreateProduct = () => {
                   trigger={trigger}
                   disabled={saving}
                   showErrors={false}
+                  initialImages={initialImages}
                 />
                 {errors.images && (
                   <p className="text-destructive text-sm font-medium">

@@ -14,7 +14,9 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -41,257 +43,267 @@ import { api } from "@/services/Api";
 
 // Columns remain same as your current definition
 // Define the column structure
-const columns = [
-  {
-    id: "select",
-    header: ({ table }) => (
-      <Checkbox
-        checked={
-          table.getIsAllPageRowsSelected() ||
-          (table.getIsSomePageRowsSelected() && "indeterminate")
-        }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
-      />
-    ),
-    enableSorting: false,
-    enableHiding: false,
-    size: 40,
-  },
-  {
-    accessorKey: "productName",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="w-full justify-start p-0 hover:bg-transparent"
-        >
-          Product Name
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ row }) => (
-      <div className="font-medium min-w-[120px]">
-        {row.getValue("productName")}
-      </div>
-    ),
-    size: 150,
-  },
-  {
-    accessorKey: "price",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="w-full justify-end p-0 hover:bg-transparent"
-        >
-          Price
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ row }) => {
-      const price = parseFloat(row.getValue("price"));
-      const formatted = new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-      }).format(price);
-
-      return (
-        <div className="text-right font-medium whitespace-nowrap">
-          {formatted}
-        </div>
-      );
-    },
-    size: 100,
-  },
-  {
-    accessorKey: "stock",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="w-full justify-center p-0 hover:bg-transparent"
-        >
-          Stock
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ row }) => {
-      const stock = parseInt(row.getValue("stock"));
-      const getStockStatus = (quantity) => {
-        if (quantity === 0)
-          return { label: "Out of Stock", variant: "destructive" };
-        if (quantity <= 10) return { label: "Low Stock", variant: "secondary" };
-        return { label: "In Stock", variant: "default" };
-      };
-
-      const status = getStockStatus(stock);
-
-      return (
-        <div className="flex flex-col items-center gap-1 min-w-[100px]">
-          <span className="font-medium text-base">{stock}</span>
-          <Badge variant={status.variant} className="text-xs">
-            {status.label}
-          </Badge>
-        </div>
-      );
-    },
-    size: 120,
-  },
-  {
-    accessorKey: "categories",
-    header: () => <div className="text-left">Categories</div>,
-    cell: ({ row }) => {
-      const categories = row.getValue("categories");
-      return (
-        <div className="flex flex-wrap gap-1 min-w-[150px] max-w-[200px]">
-          {Array.isArray(categories) &&
-            categories.slice(0, 2).map((category, index) => (
-              <Badge
-                key={index}
-                variant="outline"
-                className="text-xs capitalize"
-              >
-                {category}
-              </Badge>
-            ))}
-          {Array.isArray(categories) && categories.length > 2 && (
-            <Badge variant="outline" className="text-xs">
-              +{categories.length - 2}
-            </Badge>
-          )}
-        </div>
-      );
-    },
-    size: 200,
-  },
-  {
-    accessorKey: "selectedValue",
-    header: () => <div className="text-left">Primary Category</div>,
-    cell: ({ row }) => {
-      const category = row.getValue("selectedValue");
-      return (
-        <Badge variant="secondary" className="capitalize whitespace-nowrap">
-          {category}
-        </Badge>
-      );
-    },
-    size: 140,
-  },
-  {
-    accessorKey: "description",
-    header: () => <div className="text-left">Description</div>,
-    cell: ({ row }) => {
-      const description = row.getValue("description");
-      return (
-        <div
-          className="max-w-[180px] truncate text-sm text-muted-foreground"
-          title={description}
-        >
-          {description || "No description"}
-        </div>
-      );
-    },
-    size: 200,
-  },
-  {
-    accessorKey: "createdAt",
-    header: ({ column }) => {
-      return (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="w-full justify-start p-0 hover:bg-transparent"
-        >
-          Created At
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      );
-    },
-    cell: ({ row }) => {
-      const date = new Date(row.getValue("createdAt"));
-      return (
-        <div className="text-sm whitespace-nowrap min-w-[100px]">
-          {date.toLocaleDateString("en-IN")}
-        </div>
-      );
-    },
-    size: 120,
-  },
-  {
-    id: "actions",
-    header: () => <div className="text-center">Actions</div>,
-    cell: ({ row }) => {
-      const product = row.original;
-
-      const handleView = () => {
-        console.log("View product:", product._id);
-      };
-
-      const handleEdit = () => {
-        console.log("Edit product:", product._id);
-      };
-
-      const handleDelete = async () => {
-        if (confirm("Are you sure you want to delete this product?")) {
-          try {
-            await api.delete(`/products/${product._id}`);
-            console.log("Product deleted successfully");
-          } catch (error) {
-            console.error("Failed to delete product:", error);
+function buildColumns({ fetchProducts, navigate }) {
+  return [
+    {
+      id: "select",
+      header: ({ table }) => (
+        <Checkbox
+          checked={
+            table.getIsAllPageRowsSelected() ||
+            (table.getIsSomePageRowsSelected() && "indeterminate")
           }
-        }
-      };
-
-      return (
-        <div className="flex justify-center">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onClick={handleView}>
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleEdit}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Product
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={handleDelete}
-                className="text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      );
+          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onCheckedChange={(value) => row.toggleSelected(!!value)}
+          aria-label="Select row"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+      size: 40,
     },
-    enableHiding: false,
-    size: 80,
-  },
-];
+    {
+      accessorKey: "productName",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="w-full justify-start p-0 hover:bg-transparent"
+          >
+            Product Name
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => (
+        <div className="font-medium min-w-[120px]">
+          {row.getValue("productName")}
+        </div>
+      ),
+      size: 150,
+    },
+    {
+      accessorKey: "price",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="w-full justify-end p-0 hover:bg-transparent"
+          >
+            Price
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const price = parseFloat(row.getValue("price"));
+        const formatted = new Intl.NumberFormat("en-IN", {
+          style: "currency",
+          currency: "INR",
+        }).format(price);
+
+        return (
+          <div className="text-right font-medium whitespace-nowrap">
+            {formatted}
+          </div>
+        );
+      },
+      size: 100,
+    },
+    {
+      accessorKey: "stock",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="w-full justify-center p-0 hover:bg-transparent"
+          >
+            Stock
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const stock = parseInt(row.getValue("stock"));
+        const getStockStatus = (quantity) => {
+          if (quantity === 0)
+            return { label: "Out of Stock", variant: "destructive" };
+          if (quantity <= 10)
+            return { label: "Low Stock", variant: "secondary" };
+          return { label: "In Stock", variant: "default" };
+        };
+
+        const status = getStockStatus(stock);
+
+        return (
+          <div className="flex flex-col items-center gap-1 min-w-[100px]">
+            <span className="font-medium text-base">{stock}</span>
+            <Badge variant={status.variant} className="text-xs">
+              {status.label}
+            </Badge>
+          </div>
+        );
+      },
+      size: 120,
+    },
+    {
+      accessorKey: "categories",
+      header: () => <div className="text-left">Categories</div>,
+      cell: ({ row }) => {
+        const categories = row.getValue("categories");
+        return (
+          <div className="flex flex-wrap gap-1 min-w-[150px] max-w-[200px]">
+            {Array.isArray(categories) &&
+              categories.slice(0, 2).map((category, index) => (
+                <Badge
+                  key={index}
+                  variant="outline"
+                  className="text-xs capitalize"
+                >
+                  {category}
+                </Badge>
+              ))}
+            {Array.isArray(categories) && categories.length > 2 && (
+              <Badge variant="outline" className="text-xs">
+                +{categories.length - 2}
+              </Badge>
+            )}
+          </div>
+        );
+      },
+      size: 200,
+    },
+    {
+      accessorKey: "selectedValue",
+      header: () => <div className="text-left">Primary Category</div>,
+      cell: ({ row }) => {
+        const category = row.getValue("selectedValue");
+        return (
+          <Badge variant="secondary" className="capitalize whitespace-nowrap">
+            {category}
+          </Badge>
+        );
+      },
+      size: 140,
+    },
+    {
+      accessorKey: "description",
+      header: () => <div className="text-left">Description</div>,
+      cell: ({ row }) => {
+        const description = row.getValue("description");
+        return (
+          <div
+            className="max-w-[180px] truncate text-sm text-muted-foreground"
+            title={description}
+          >
+            {description || "No description"}
+          </div>
+        );
+      },
+      size: 200,
+    },
+    {
+      accessorKey: "createdAt",
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="w-full justify-start p-0 hover:bg-transparent"
+          >
+            Created At
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        );
+      },
+      cell: ({ row }) => {
+        const date = new Date(row.getValue("createdAt"));
+        return (
+          <div className="text-sm whitespace-nowrap min-w-[100px]">
+            {date.toLocaleDateString("en-IN")}
+          </div>
+        );
+      },
+      size: 120,
+    },
+    {
+      id: "actions",
+      header: () => <div className="text-center">Actions</div>,
+      cell: ({ row }) => {
+        const product = row.original;
+
+        const handleView = () => {
+          console.log("View product:", product._id);
+        };
+
+        const handleEdit = () => {
+          // Navigate to edit page and pass product in state for quick prefill
+          navigate(`/dashboard/products/edit/${product._id}`, {
+            state: { product },
+          });
+        };
+
+        const handleDelete = async () => {
+          if (confirm("Are you sure you want to delete this product?")) {
+            try {
+              // Server delete route is mounted at base /api/v1/:id
+              await api.delete(`/${product._id}`);
+              toast.success("Product deleted successfully");
+              // Refresh list
+              if (typeof fetchProducts === "function") fetchProducts();
+            } catch (error) {
+              console.error("Failed to delete product:", error);
+              toast.error("Failed to delete product");
+            }
+          }
+        };
+
+        return (
+          <div className="flex justify-center">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem onClick={handleView}>
+                  <Eye className="mr-2 h-4 w-4" />
+                  View Details
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleEdit}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Product
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleDelete}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        );
+      },
+      enableHiding: false,
+      size: 80,
+    },
+  ];
+}
 
 function TanstackTable() {
   // Table state
@@ -306,8 +318,10 @@ function TanstackTable() {
     pageSize: 10,
   });
 
+  console.log(data);
+
   // Fetch data from backend with pagination & filters
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
     try {
       setIsLoading(true);
 
@@ -329,6 +343,7 @@ function TanstackTable() {
 
       if (response.data?.success) {
         setData(response.data.data || []);
+        console.log(response.data);
         setTotalItems(response.data.pagination.totalItems);
         setPageCount(response.data.pagination.totalPages);
       } else {
@@ -340,12 +355,23 @@ function TanstackTable() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pagination.pageIndex, pagination.pageSize, columnFilters]);
+
+  const navigate = useNavigate();
+
+  // Build columns with access to fetchProducts and navigate
+  const columns = buildColumns({ fetchProducts, navigate });
 
   // Fetch on mount and when pagination/sorting/filter changes
   useEffect(() => {
     fetchProducts();
-  }, [pagination.pageIndex, pagination.pageSize, columnFilters, sorting]);
+  }, [
+    pagination.pageIndex,
+    pagination.pageSize,
+    columnFilters,
+    sorting,
+    fetchProducts,
+  ]);
 
   // React Table instance
   const table = useReactTable({

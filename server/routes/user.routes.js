@@ -13,21 +13,14 @@ const {
   authenticate,
   verifyRefreshToken,
 } = require("../middleware/verifyToken");
-const authValidation = require("../middleware/validation");
+const authValidation = require("../middleware/validations/authValidation");
 const userRouter = express.Router();
 
 // User registration
 userRouter.post("/signup", authValidation.register, signupController);
 
 // User login
-userRouter.post(
-  "/login",
-  [
-    body("email").isEmail().withMessage("Valid email is required"),
-    body("password").notEmpty().withMessage("Password is required"),
-  ],
-  loginController
-);
+userRouter.post("/login", authValidation.login, loginController);
 
 // User logout
 userRouter.delete("/logout", logoutController);

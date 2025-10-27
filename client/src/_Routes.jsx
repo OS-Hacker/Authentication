@@ -155,7 +155,7 @@ const routes = [
           },
           {
             path: "edit/:id",
-            element: <CreateProduct />, // You might want to create an EditProduct component
+            element: <CreateProduct />, // reuse CreateProduct for edit mode
           },
         ],
       },

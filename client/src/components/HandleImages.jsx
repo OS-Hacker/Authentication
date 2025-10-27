@@ -25,9 +25,11 @@ const HandleImages = ({
   trigger,
   errors,
   disabled = false,
-  resetTrigger
+  resetTrigger,
+  initialImages = [], // array of existing remote images: { id, url }
 }) => {
   const [previewImages, setPreviewImages] = useState([]);
+  const [removedRemoteIds, setRemovedRemoteIds] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
   const dropZoneRef = useRef(null);
@@ -39,6 +41,39 @@ const HandleImages = ({
       setPreviewImages([]);
     }
   }, [resetTrigger, previewImages]);
+
+  // Initialize with any remote images passed from edit mode
+  useEffect(() => {
+    if (initialImages && initialImages.length > 0) {
+      const remotePreviews = initialImages.map((img) => ({
+        id: img.id || Math.random().toString(36).substr(2, 9),
+        file: null,
+        url: img.url,
+        name: img.name || "remote",
+        size: "-",
+        remote: true,
+        remoteId: img.id,
+      }));
+
+      // Only set if not already present
+      setPreviewImages((prev) => {
+        // avoid duplicating if already present
+        const existingUrls = new Set(prev.map((p) => p.url));
+        const toAdd = remotePreviews.filter((p) => !existingUrls.has(p.url));
+        const all = [...prev, ...toAdd];
+        // Update form value to include only local files
+        const allFiles = all.map((p) => p.file).filter(Boolean);
+        setValue("images", allFiles, { shouldValidate: true });
+        trigger("images");
+        return all;
+      });
+    }
+  }, [initialImages, setValue, trigger]);
+
+  // Keep form field in sync with removed remote ids
+  useEffect(() => {
+    setValue("removedImages", removedRemoteIds, { shouldValidate: false });
+  }, [removedRemoteIds, setValue]);
 
   // 🧠 Process & Preview Images - Let Zod handle validation
   const processNewImages = useCallback(
@@ -57,7 +92,8 @@ const HandleImages = ({
       setPreviewImages(allPreviews);
 
       // Update form value - Zod will handle validation
-      const allFiles = allPreviews.map((p) => p.file);
+      // only include real File objects (ignore remote images where file == null)
+      const allFiles = allPreviews.map((p) => p.file).filter(Boolean);
       setValue("images", allFiles, { shouldValidate: true });
 
       trigger("images");
@@ -71,13 +107,27 @@ const HandleImages = ({
       const imgToRemove = previewImages.find((i) => i.id === id);
       if (!imgToRemove) return;
 
-      URL.revokeObjectURL(imgToRemove.url);
+      if (!imgToRemove.remote) {
+        // only revoke object urls for local files
+        try {
+          URL.revokeObjectURL(imgToRemove.url);
+        } catch (err) {
+          console.warn("Failed to revoke object URL:", err);
+        }
+      }
 
       const updated = previewImages.filter((i) => i.id !== id);
+      // If it was a remote image, track its remote id for server-side deletion
+      if (imgToRemove.remote && imgToRemove.remoteId) {
+        setRemovedRemoteIds((prev) => {
+          const next = Array.from(new Set([...prev, imgToRemove.remoteId]));
+          return next;
+        });
+      }
       setPreviewImages(updated);
 
-      // Update form value - Zod will handle validation
-      const remainingFiles = updated.map((i) => i.file);
+      // Update form value - include only local files
+      const remainingFiles = updated.map((i) => i.file).filter(Boolean);
       setValue("images", remainingFiles, { shouldValidate: true });
 
       trigger("images");
@@ -87,7 +137,26 @@ const HandleImages = ({
 
   // 🧹 Remove All
   const handleRemoveAll = useCallback(() => {
-    previewImages.forEach((i) => URL.revokeObjectURL(i.url));
+    // collect remote ids to remove
+    const remoteIds = previewImages
+      .filter((p) => p.remote && p.remoteId)
+      .map((p) => p.remoteId);
+    if (remoteIds.length) {
+      setRemovedRemoteIds((prev) =>
+        Array.from(new Set([...prev, ...remoteIds]))
+      );
+    }
+
+    previewImages.forEach((i) => {
+      if (!i.remote) {
+        try {
+          URL.revokeObjectURL(i.url);
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+
     setPreviewImages([]);
     setValue("images", [], { shouldValidate: true });
     trigger("images");
@@ -215,6 +284,14 @@ const HandleImages = ({
             />
           </CardContent>
         </Card>
+      )}
+
+      {/* Image preview error */}
+      {displayError && (
+        <div className="flex items-center gap-2 text-destructive text-sm">
+          <AlertCircle className="h-4 w-4" />
+          <span>{displayError}</span>
+        </div>
       )}
 
       {/* Image Preview Grid */}

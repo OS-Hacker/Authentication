@@ -108,6 +108,32 @@ const authValidation = {
   ],
 };
 
+const productsValidations = {
+  // product validations
+  createProduct: [
+    body("productName")
+      .notEmpty()
+      .withMessage("productName is required")
+      .isLength({ min: 3, max: 50 })
+      .withMessage("productName name must be between 3 and 50 characters"),
+    body("price")
+      .notEmpty()
+      .withMessage("Price is required")
+      .isNumeric()
+      .withMessage("Price must be number"),
+    body("description")
+      .notEmpty()
+      .withMessage("description is required")
+      .isLength({ min: 3, max: 100 })
+      .withMessage("description must be between 1 and 100 characters"),
+    body("stock")
+      .notEmpty()
+      .withMessage("stock is required")
+      .withMessage("Price is required")
+      .isNumeric(),
+  ],
+};
+
 module.exports = {
   ...authValidation,
   handleValidationErrors,

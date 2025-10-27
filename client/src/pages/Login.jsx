@@ -155,14 +155,14 @@ const Login = () => {
         {/* Signup Link */}
         <div className="text-center mt-6 text-gray-400 text-sm">
           Don't have an account?{" "}
-          <Link to="/signup" className="text-orange-500 hover:underline">
+          <Link to="/auth/signup" className="text-orange-500 hover:underline">
             Sign up
           </Link>
         </div>
 
         {/* Forgot Password */}
         <Link
-          to="/forgot-password"
+          to="/auth/forgot-password"
           className="block text-sm text-orange-500 mt-1 text-center hover:underline"
         >
           Forgot password?

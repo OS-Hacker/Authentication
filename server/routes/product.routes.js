@@ -1,7 +1,7 @@
 const express = require("express");
 const productController = require("../controllers/product.controller");
-const upload = require("../middleware/upload");
-const { handleValidationErrors } = require("../middleware/validation");
+const { upload } = require("../middleware/upload");
+const productValidation = require("../middleware/validations/productValidation");
 
 const productRouter = express.Router();
 // Create product with image upload
@@ -9,7 +9,7 @@ productRouter.post(
   "/create-product",
   upload.array("images", 5), // Max 5 images
   // productValidation,
-  handleValidationErrors,
+  productValidation.createProduct,
   productController.createProduct
 );
 
@@ -17,7 +17,7 @@ productRouter.post(
 productRouter.get("/products", productController.getProducts);
 
 // Get single product
-productRouter.get("/:id", productController.getProduct);
+// productRouter.get("/:id", productController.getProduct);
 
 // Update product
 productRouter.put(
@@ -32,9 +32,9 @@ productRouter.put(
 productRouter.delete("/:id", productController.deleteProduct);
 
 // Delete product image
-productRouter.delete(
-  "/:productId/images/:imageId",
-  productController.deleteProductImage
-);
+// productRouter.delete(
+//   "/:productId/images/:imageId",
+//   // productController.deleteProductImage
+// );
 
 module.exports = productRouter;
